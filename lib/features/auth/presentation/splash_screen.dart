@@ -49,27 +49,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
 
   Future<void> _initializeServices() async {
     try {
-      await Future.delayed(const Duration(milliseconds: 300));
-      setState(() => _statusMessage = 'Loading offline storage manager...');
+      // Fast non-blocking initialization
       await OfflineStorageManager.instance.initialize();
+      await AppDatabase.instance.database;
 
-      setState(() => _statusMessage = 'Opening local SQLite database...');
-      final db = AppDatabase.instance;
-      await db.database;
-
-      setState(() => _statusMessage = 'Verifying engineering drawing packages...');
+      // Seed sample data in background
       final projectsRepo = ref.read(projectsRepositoryProvider);
       final drawingsRepo = ref.read(drawingsRepositoryProvider);
       final markupsRepo = ref.read(markupsRepositoryProvider);
 
-      await SampleDataSeeder.seedIfEmpty(
+      SampleDataSeeder.seedIfEmpty(
         projectsRepository: projectsRepo,
         drawingsRepository: drawingsRepo,
         markupsRepository: markupsRepo,
       );
-
-      setState(() => _statusMessage = 'Offline tablet system ready.');
-      await Future.delayed(const Duration(milliseconds: 600));
 
       if (!mounted) return;
       final settings = ref.read(settingsNotifierProvider);
@@ -79,7 +72,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
         context.go('/dashboard');
       }
     } catch (e) {
-      setState(() => _statusMessage = 'Initialization error: $e');
+      if (mounted) {
+        context.go('/dashboard');
+      }
     }
   }
 

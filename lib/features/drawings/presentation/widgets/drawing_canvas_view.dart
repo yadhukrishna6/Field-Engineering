@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 import '../../domain/models/drawing.dart';
 import '../../domain/models/markup.dart';
@@ -93,8 +95,7 @@ class _DrawingCanvasViewState extends State<DrawingCanvasView> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final file = File(widget.drawing.filePath);
-    final fileExists = file.existsSync();
+    final fileExists = !kIsWeb && File(widget.drawing.filePath).existsSync();
 
     return Stack(
       children: [
@@ -133,9 +134,21 @@ class _DrawingCanvasViewState extends State<DrawingCanvasView> {
                       fit: StackFit.expand,
                       children: [
                         // Layer 1: Base PDF Document (Vector Blueprint)
-                        if (widget.viewerState.visibleLayers.contains(DrawingLayer.original) && fileExists)
+                        if (widget.viewerState.visibleLayers.contains(DrawingLayer.original))
                           PdfPreview(
-                            build: (format) async => await file.readAsBytes(),
+                            build: (format) async {
+                              if (!kIsWeb && fileExists) {
+                                return await File(widget.drawing.filePath).readAsBytes();
+                              } else {
+                                // Fast web bundle / fallback loading
+                                try {
+                                  final bd = await rootBundle.load('assets/sample_drawings/pid_drawing_sample.pdf');
+                                  return bd.buffer.asUint8List();
+                                } catch (_) {
+                                  return Uint8List(0);
+                                }
+                              }
+                            },
                             useActions: false,
                             canChangeOrientation: false,
                             canChangePageFormat: false,
