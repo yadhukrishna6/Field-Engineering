@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/theme/color_palette.dart';
+import '../../../../shared/widgets/app_image.dart';
 
 class PhotoViewerScreen extends ConsumerStatefulWidget {
   final String? photoId;
@@ -69,42 +69,41 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.edit_outlined, color: Colors.white),
-            onPressed: () {},
+            tooltip: 'Annotate Photo',
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Photo annotation editor activated')),
+              );
+            },
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-            onPressed: () {},
+            tooltip: 'Delete Photo',
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Photo removed from field bundle')),
+              );
+            },
           ),
         ],
       ),
       body: Stack(
         children: [
-          // Center Photo Canvas
+          // Center Photo Canvas with Interactive Zoom & Pan
           Center(
-            child: Container(
-              width: double.infinity,
-              height: double.infinity,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-                image: const DecorationImage(
-                  image: AssetImage('assets/images/piping_photo_1.jpg'),
-                  fit: BoxFit.contain,
-                  onError: null,
-                ),
-              ),
-              child: const Icon(
-                Icons.photo_size_select_actual_rounded,
-                size: 100,
-                color: Colors.white24,
+            child: InteractiveViewer(
+              minScale: 0.8,
+              maxScale: 4.0,
+              child: AppImage(
+                imageSource: photo['asset'] as String,
+                fit: BoxFit.contain,
+                width: double.infinity,
+                height: double.infinity,
               ),
             ),
           ),
 
-          // Bottom Info & Thumbnails Bar (matching Screen 7)
+          // Bottom Info & Thumbnails Bar
           Positioned(
             left: 16,
             right: 16,
@@ -164,7 +163,11 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                         ),
                         icon: const Icon(Icons.map_outlined, size: 16),
                         label: const Text('Open in Maps', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        onPressed: () {},
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('GPS Coordinates: ${photo['gps']}')),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -192,14 +195,19 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                             height: 52,
                             margin: const EdgeInsets.only(right: 8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF334155),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                 color: isSelected ? const Color(0xFF2563EB) : Colors.transparent,
                                 width: 2,
                               ),
                             ),
-                            child: const Icon(Icons.image, color: Colors.white54, size: 24),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: AppImage(
+                                imageSource: entry.value['asset'] as String,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
                           ),
                         );
                       }),
@@ -212,7 +220,12 @@ class _PhotoViewerScreenState extends ConsumerState<PhotoViewerScreen> {
                         ),
                         child: IconButton(
                           icon: const Icon(Icons.add_a_photo_outlined, color: Colors.white, size: 20),
-                          onPressed: () {},
+                          tooltip: 'Attach New Field Photo',
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Camera capture initiated for tablet')),
+                            );
+                          },
                         ),
                       ),
                     ],

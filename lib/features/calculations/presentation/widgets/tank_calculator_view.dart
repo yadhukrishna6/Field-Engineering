@@ -329,11 +329,11 @@ class _TankCalculatorViewState extends State<TankCalculatorView> {
                       const Divider(height: 28),
 
                       // Liquid Sounding / Dip level
-                      Row(
+                      const Row(
                         children: [
-                          const Icon(Icons.colorize_outlined, color: Colors.cyan, size: 20),
-                          const SizedBox(width: 8),
-                          const Text('Liquid Dip Sounding', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          Icon(Icons.colorize_outlined, color: Colors.cyan, size: 20),
+                          SizedBox(width: 8),
+                          Text('Liquid Dip Sounding', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                         ],
                       ),
                       const SizedBox(height: 12),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/theme/color_palette.dart';
 
 class AiAssistantScreen extends ConsumerStatefulWidget {
   const AiAssistantScreen({super.key});

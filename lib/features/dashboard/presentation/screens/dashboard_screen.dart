@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/color_palette.dart';
-import '../../../../core/offline/offline_sync_manager.dart';
-import '../../../../core/offline/network_status_state.dart';
-import '../controllers/dashboard_controller.dart';
 import '../../../settings/presentation/controllers/settings_controller.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {

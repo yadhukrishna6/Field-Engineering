@@ -400,7 +400,7 @@ class _SavedCalculationsViewState extends ConsumerState<SavedCalculationsView> {
           ),
           pw.Text('Generated: ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())} | Total Records: ${items.length}'),
           pw.SizedBox(height: 16),
-          pw.Table.fromTextArray(
+          pw.TableHelper.fromTextArray(
             headers: ['Date', 'Type', 'Title / Description', 'Calculated Key Results'],
             data: items.map((c) {
               final resStr = c.results.entries.map((e) => '${e.key}: ${e.value}').join('\n');

@@ -187,13 +187,13 @@ class Measurement {
       case MeasurementType.angle:
         return '${calculatedValue.toStringAsFixed(1)}°';
       case MeasurementType.radius:
-        final prefix = 'R = ';
+        const prefix = 'R = ';
         if (unit == 'm' || unit == 'ft') {
           return '$prefix${calculatedValue.toStringAsFixed(2)} $unit';
         }
         return '$prefix${calculatedValue.round()} $unit';
       case MeasurementType.diameter:
-        final prefix = 'Ø ';
+        const prefix = 'Ø ';
         if (unit == 'm' || unit == 'ft') {
           return '$prefix${calculatedValue.toStringAsFixed(2)} $unit';
         }

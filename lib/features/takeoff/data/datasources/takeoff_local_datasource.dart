@@ -36,7 +36,7 @@ class TakeoffLocalDataSource {
       }
 
       if (searchQuery != null && searchQuery.trim().isNotEmpty) {
-        final searchClause = '(${DatabaseTables.colItemName} LIKE ? OR ${DatabaseTables.colSpecification} LIKE ? OR ${DatabaseTables.colSize} LIKE ? OR ${DatabaseTables.colNotes} LIKE ?)';
+        const searchClause = '(${DatabaseTables.colItemName} LIKE ? OR ${DatabaseTables.colSpecification} LIKE ? OR ${DatabaseTables.colSize} LIKE ? OR ${DatabaseTables.colNotes} LIKE ?)';
         where = where != null ? '$where AND $searchClause' : searchClause;
         final q = '%${searchQuery.trim()}%';
         args.addAll([q, q, q, q]);

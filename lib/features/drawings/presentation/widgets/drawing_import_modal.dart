@@ -71,6 +71,7 @@ class _DrawingImportModalState extends ConsumerState<DrawingImportModal> {
         }
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not open file picker: $e')),
       );

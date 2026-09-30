@@ -11,8 +11,8 @@ void main() {
     test('Calculates drawing scale from 2 normalized points and known dimension', () {
       // Point 1 at (0.1, 0.2), Point 2 at (0.5, 0.2) -> normalized dx = 0.4, dy = 0 -> distance = 0.4
       // Known distance: 1000 mm -> scaleFactor = 1000 / 0.4 = 2500.0 mm
-      final p1 = const Point2D(0.1, 0.2);
-      final p2 = const Point2D(0.5, 0.2);
+      const p1 = Point2D(0.1, 0.2);
+      const p2 = Point2D(0.5, 0.2);
       final calibration = DrawingCalibration.fromPoints(
         id: 'calib-001',
         drawingId: 'drawing-101',

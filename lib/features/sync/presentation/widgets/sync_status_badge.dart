@@ -13,7 +13,7 @@ class SyncStatusBadge extends ConsumerWidget {
     final statusAsync = ref.watch(syncStatusStreamProvider);
 
     final status = statusAsync.value ??
-        SyncEngineStatus(
+        const SyncEngineStatus(
           state: SyncEngineState.synced,
           pendingCount: 0,
           failedCount: 0,

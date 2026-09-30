@@ -5,7 +5,6 @@ import '../../domain/models/drawing.dart';
 import '../../domain/models/drawing_type.dart';
 import '../controllers/drawings_controller.dart';
 import '../widgets/drawing_import_modal.dart';
-import '../../../../core/theme/color_palette.dart';
 
 class DrawingListScreen extends ConsumerStatefulWidget {
   final String? projectName;

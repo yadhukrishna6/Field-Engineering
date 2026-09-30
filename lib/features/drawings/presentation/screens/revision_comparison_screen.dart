@@ -110,15 +110,8 @@ class _RevisionComparisonScreenState extends ConsumerState<RevisionComparisonScr
           }
 
           // Default selection if not yet set
-          if (_selectedPreviousRevision == null && revisions.length > 1) {
-            _selectedPreviousRevision = revisions.last; // Older revision (e.g. Rev 00)
-          } else if (_selectedPreviousRevision == null) {
-            _selectedPreviousRevision = revisions.first;
-          }
-
-          if (_selectedCurrentRevision == null) {
-            _selectedCurrentRevision = revisions.first; // Newer revision (e.g. Rev 01)
-          }
+          _selectedPreviousRevision ??= revisions.length > 1 ? revisions.last : revisions.first;
+          _selectedCurrentRevision ??= revisions.first;
 
           return Column(
             children: [
@@ -518,7 +511,7 @@ class EngineeringCADDrawingPainter extends CustomPainter {
       ..strokeWidth = 2.0;
 
     // Common Vessel Tank (V-101)
-    final vesselRect = Rect.fromLTWH(100, 150, 180, 300);
+    const vesselRect = Rect.fromLTWH(100, 150, 180, 300);
     canvas.drawRRect(RRect.fromRectAndRadius(vesselRect, const Radius.circular(24)), linePaint);
 
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
@@ -604,7 +597,7 @@ class RevisionDiffPainter extends CustomPainter {
       ..strokeWidth = 2.0;
 
     // Green Highlight Box for Added Bypass
-    final addedRect = Rect.fromLTWH(360, 340, 260, 70);
+    const addedRect = Rect.fromLTWH(360, 340, 260, 70);
     canvas.drawRRect(RRect.fromRectAndRadius(addedRect, const Radius.circular(8)), addCloudPaint);
     canvas.drawRRect(RRect.fromRectAndRadius(addedRect, const Radius.circular(8)), addCloudBorder);
 
@@ -616,7 +609,7 @@ class RevisionDiffPainter extends CustomPainter {
       ..color = Colors.redAccent
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
-    final removedRect = Rect.fromLTWH(520, 160, 80, 90);
+    const removedRect = Rect.fromLTWH(520, 160, 80, 90);
     canvas.drawRRect(RRect.fromRectAndRadius(removedRect, const Radius.circular(8)), remCloudPaint);
     canvas.drawRRect(RRect.fromRectAndRadius(removedRect, const Radius.circular(8)), remCloudBorder);
   }

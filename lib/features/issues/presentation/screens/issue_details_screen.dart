@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/theme/color_palette.dart';
 
 class IssueDetailsScreen extends ConsumerStatefulWidget {
   final String issueId;
@@ -66,7 +65,7 @@ class _IssueDetailsScreenState extends ConsumerState<IssueDetailsScreen> with Si
           },
         ),
         title: Text(
-          'Issue #102',
+          'Issue #${widget.issueId.replaceAll('ISSUE-', '')}',
           style: TextStyle(
             fontWeight: FontWeight.w900,
             fontSize: 18,
@@ -74,21 +73,38 @@ class _IssueDetailsScreenState extends ConsumerState<IssueDetailsScreen> with Si
           ),
         ),
         actions: [
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF16A34A).withOpacity(0.15),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFF16A34A).withOpacity(0.4)),
-            ),
-            child: const Center(
-              child: Text(
-                'Open',
-                style: TextStyle(
-                  color: Color(0xFF16A34A),
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
+          PopupMenuButton<String>(
+            tooltip: 'Change Status',
+            onSelected: (newStatus) {
+              setState(() {
+                _selectedStatus = newStatus;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Issue status updated to $_selectedStatus')),
+              );
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'Open', child: Text('Open')),
+              const PopupMenuItem(value: 'In Progress', child: Text('In Progress')),
+              const PopupMenuItem(value: 'Resolved', child: Text('Resolved')),
+              const PopupMenuItem(value: 'Closed', child: Text('Closed')),
+            ],
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF16A34A).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFF16A34A).withOpacity(0.4)),
+              ),
+              child: Center(
+                child: Text(
+                  _selectedStatus,
+                  style: const TextStyle(
+                    color: Color(0xFF16A34A),
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),

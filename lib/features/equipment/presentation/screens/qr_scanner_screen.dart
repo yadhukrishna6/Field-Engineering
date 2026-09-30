@@ -17,7 +17,6 @@ class QrScannerScreen extends ConsumerStatefulWidget {
 class _QrScannerScreenState extends ConsumerState<QrScannerScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   final TextEditingController _manualTagController = TextEditingController();
-  EquipmentQrPayload? _scannedResult;
 
   final List<EquipmentQrPayload> _sampleTags = const [
     EquipmentQrPayload(
@@ -71,9 +70,6 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> with SingleTi
   }
 
   void _onTagScanned(EquipmentQrPayload payload) {
-    setState(() {
-      _scannedResult = payload;
-    });
     _showEquipmentDetailsModal(payload);
   }
 

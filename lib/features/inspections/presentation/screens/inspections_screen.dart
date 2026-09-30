@@ -67,6 +67,7 @@ class _InspectionsScreenState extends ConsumerState<InspectionsScreen> {
   }
 
   void _showNewInspectionDialog() {
+    final router = GoRouter.of(context);
     String title = 'Piping Line Pre-Commissioning QC';
     String templateType = 'Piping';
     String inspectorName = 'Lead QC Inspector';
@@ -75,7 +76,7 @@ class _InspectionsScreenState extends ConsumerState<InspectionsScreen> {
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
-          builder: (context, setDlgState) {
+          builder: (dialogContext, setDlgState) {
             return AlertDialog(
               title: const Row(
                 children: [
@@ -160,7 +161,7 @@ class _InspectionsScreenState extends ConsumerState<InspectionsScreen> {
                     await _refreshInspections();
 
                     if (mounted) {
-                      context.push('/inspections/${newInspection.id}');
+                      router.push('/inspections/${newInspection.id}');
                     }
                   },
                   icon: const Icon(Icons.check),

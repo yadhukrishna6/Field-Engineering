@@ -69,7 +69,7 @@ class GpsCoordinates {
     // Approximate northing and easting for field labeling
     final northing = ((latitude + 90) * 111139).round();
     final easting = (((longitude + 180) % 6) * 111319 * math.cos(latitude * math.pi / 180)).abs().round();
-    return 'UTM Zone ${zone}$hemisphere E:$easting N:$northing';
+    return 'UTM Zone $zone$hemisphere E:$easting N:$northing';
   }
 }
 

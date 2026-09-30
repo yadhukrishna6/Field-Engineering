@@ -48,7 +48,6 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
   bool _showLayerPanel = false;
   bool _showThumbnailDrawer = false;
   bool _showSearchFilterBar = false;
-
   // Phase 6 State
   SplitPanelType _activeSplitPanel = SplitPanelType.none;
   AsBuiltStage _currentAsBuiltStage = AsBuiltStage.fieldMarkup;
@@ -366,6 +365,7 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                     icon: const Icon(Icons.draw_rounded, size: 16),
                     label: Text('Sign & Advance to ${_currentAsBuiltStage.nextStage!.shortCode}'),
                     onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
                       Navigator.pop(context);
                       final sigResult = await DigitalSignaturePadDialog.show(
                         context,
@@ -376,7 +376,7 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                         setState(() {
                           _currentAsBuiltStage = _currentAsBuiltStage.nextStage!;
                         });
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        messenger.showSnackBar(SnackBar(
                           content: Text('Drawing successfully advanced to ${_currentAsBuiltStage.displayName}'),
                           backgroundColor: Colors.green,
                         ));
@@ -441,7 +441,6 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
 
         final viewerState = ref.watch(markupControllerProvider(drawing.id));
         final markupController = ref.read(markupControllerProvider(drawing.id).notifier);
-        final fileExists = !kIsWeb && File(drawing.filePath).existsSync();
 
         return Scaffold(
           backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
@@ -884,7 +883,12 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                         const SizedBox(height: 8),
                         MarkupSearchFilterBar(
                           totalMarkupsCount: viewerState.activePageMarkups.length,
-                          filteredMarkupsCount: viewerState.activePageMarkups.length,
+                          filteredMarkupsCount: viewerState.activePageMarkups.where((m) {
+                            final matchQuery = _searchFilterQuery.isEmpty || (m.text?.toLowerCase().contains(_searchFilterQuery.toLowerCase()) ?? false);
+                            final matchLayer = _selectedFilterLayer == null || _selectedFilterLayer == 'All Layers' || m.layer.displayName == _selectedFilterLayer;
+                            final matchDiscipline = _selectedFilterDiscipline == null || _selectedFilterDiscipline == 'All Disciplines' || (m.metadata?['discipline'] == _selectedFilterDiscipline);
+                            return matchQuery && matchLayer && matchDiscipline;
+                          }).length,
                           onSearchChanged: (q) => setState(() => _searchFilterQuery = q),
                           onLayerFilterChanged: (l) => setState(() => _selectedFilterLayer = l),
                           onDisciplineFilterChanged: (d) => setState(() => _selectedFilterDiscipline = d),

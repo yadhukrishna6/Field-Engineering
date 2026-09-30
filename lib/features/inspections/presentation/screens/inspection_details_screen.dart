@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/theme/color_palette.dart';
 import '../../../../shared/widgets/digital_signature_pad.dart';
 
 class InspectionDetailsScreen extends ConsumerStatefulWidget {
@@ -276,12 +275,14 @@ class _InspectionDetailsScreenState extends ConsumerState<InspectionDetailsScree
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       onPressed: () async {
+                        final messenger = ScaffoldMessenger.of(context);
                         final sig = await DigitalSignaturePadDialog.show(
                           context,
                           documentTitle: 'Piping Inspection Completion Sign-off',
                         );
+                        if (!mounted) return;
                         if (sig != null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          messenger.showSnackBar(
                             const SnackBar(content: Text('Inspection completed and digitally signed!')),
                           );
                         }

@@ -5,7 +5,6 @@ import '../controllers/projects_controller.dart';
 import '../widgets/project_form_dialog.dart';
 import '../../domain/models/project.dart';
 import '../../domain/models/project_status.dart';
-import '../../../../core/theme/color_palette.dart';
 
 class ProjectListScreen extends ConsumerStatefulWidget {
   const ProjectListScreen({super.key});

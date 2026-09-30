@@ -244,6 +244,7 @@ class OfflineDataScreen extends ConsumerWidget {
                                       ref.read(offlineStorageNotifierProvider.notifier).refreshUsage();
                                     }
                                   } catch (e) {
+                                    if (!context.mounted) return;
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(content: Text('Could not delete file: $e')),
                                     );

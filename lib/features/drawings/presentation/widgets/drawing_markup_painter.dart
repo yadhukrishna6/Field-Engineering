@@ -390,8 +390,12 @@ class DrawingMarkupPainter extends CustomPainter {
     final angle2 = math.atan2(p2.dy - p1.dy, p2.dx - p1.dx);
     var sweep = angle2 - angle1;
 
-    while (sweep < -math.pi) sweep += 2 * math.pi;
-    while (sweep > math.pi) sweep -= 2 * math.pi;
+    while (sweep < -math.pi) {
+      sweep += 2 * math.pi;
+    }
+    while (sweep > math.pi) {
+      sweep -= 2 * math.pi;
+    }
 
     const arcRadius = 28.0;
     final rect = Rect.fromCircle(center: p1, radius: arcRadius);
@@ -488,7 +492,7 @@ class DrawingMarkupPainter extends CustomPainter {
     );
 
     final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr)..layout();
-    final padding = const EdgeInsets.symmetric(horizontal: 8, vertical: 4);
+    const padding = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
     final pillRect = Rect.fromCenter(
       center: center,
       width: tp.width + padding.horizontal,
@@ -764,7 +768,7 @@ class DrawingMarkupPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout();
 
-    final padding = const EdgeInsets.symmetric(horizontal: 10, vertical: 6);
+    const padding = EdgeInsets.symmetric(horizontal: 10, vertical: 6);
     final boxRect = Rect.fromLTWH(
       pos.dx,
       pos.dy,
@@ -825,7 +829,7 @@ class DrawingMarkupPainter extends CustomPainter {
     canvas.drawCircle(pos, radius, pinPaint);
     canvas.drawCircle(pos, radius, borderPaint);
 
-    final textSpan = const TextSpan(
+    const textSpan = TextSpan(
       text: '📷',
       style: TextStyle(fontSize: 11),
     );
@@ -843,7 +847,7 @@ class DrawingMarkupPainter extends CustomPainter {
     );
     final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr)..layout();
 
-    final padding = const EdgeInsets.symmetric(horizontal: 14, vertical: 8);
+    const padding = EdgeInsets.symmetric(horizontal: 14, vertical: 8);
     final rect = Rect.fromLTWH(pos.dx, pos.dy, tp.width + padding.horizontal, tp.height + padding.vertical);
 
     final stampPaint = Paint()

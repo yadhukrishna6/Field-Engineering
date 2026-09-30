@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/offline/offline_sync_manager.dart';
-import '../../../../core/theme/color_palette.dart';
 
 class SyncCenterScreen extends ConsumerWidget {
   const SyncCenterScreen({super.key});
@@ -253,17 +252,27 @@ class SyncCenterScreen extends ConsumerWidget {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 2,
                   ),
-                  icon: const Icon(Icons.sync_rounded, size: 22),
-                  label: const Text(
-                    'Sync Now',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  icon: syncState.isSyncing
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.sync_rounded, size: 22),
+                  label: Text(
+                    syncState.isSyncing ? 'Syncing Items...' : 'Sync Now',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
-                  onPressed: () {
-                    ref.read(offlineSyncProvider.notifier).triggerSync();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Synchronization batch completed! Local DB updated.')),
-                    );
-                  },
+                  onPressed: syncState.isSyncing
+                      ? null
+                      : () async {
+                          await ref.read(offlineSyncProvider.notifier).triggerSync();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Synchronization completed! Local DB updated.')),
+                            );
+                          }
+                        },
                 ),
               ),
               const SizedBox(height: 12),

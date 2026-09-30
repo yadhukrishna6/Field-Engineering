@@ -225,7 +225,7 @@ void main() {
     });
 
     test('Checklist item supports PASS, FAIL, N/A, PENDING status and comments', () {
-      final item = InspectionItem(
+      const item = InspectionItem(
         id: 'CHK-01',
         inspectionId: 'INSP-101',
         category: 'Piping',
@@ -343,7 +343,7 @@ void main() {
       expect(savedEq!.name, 'Feed Preheater Exchanger');
 
       // 3. Create Full Inspection Checklist with 10 Piping Items
-      final inspId = 'INSP-OFFLINE-01';
+      const inspId = 'INSP-OFFLINE-01';
       final templateItems = Inspection.createTemplateItems(
         inspectionId: inspId,
         templateType: 'Piping',

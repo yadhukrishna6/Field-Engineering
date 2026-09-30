@@ -367,7 +367,7 @@ class DrawingGenerator {
               children: [
                 pw.Text('PROJECT: $projectName', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9)),
                 pw.SizedBox(height: 2),
-                pw.Text('TITLE: $title', style: pw.TextStyle(fontSize: 8, color: PdfColors.grey900)),
+                pw.Text('TITLE: $title', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey900)),
               ],
             ),
           ),

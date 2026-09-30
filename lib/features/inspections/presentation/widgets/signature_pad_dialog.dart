@@ -233,9 +233,10 @@ class _SignaturePadDialogState extends State<SignaturePadDialog> {
                   onPressed: _isSaving
                       ? null
                       : () async {
+                          final nav = Navigator.of(context);
                           final path = await _saveSignature();
                           if (path != null && mounted) {
-                            Navigator.pop(context, path);
+                            nav.pop(path);
                           }
                         },
                   icon: const Icon(Icons.check_rounded, size: 18),

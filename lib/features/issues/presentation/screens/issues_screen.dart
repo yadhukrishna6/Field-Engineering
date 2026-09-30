@@ -187,7 +187,7 @@ class _IssuesScreenState extends ConsumerState<IssuesScreen> with SingleTickerPr
               ),
             ),
             pw.SizedBox(height: 12),
-            pw.Table.fromTextArray(
+            pw.TableHelper.fromTextArray(
               headers: ['Item #', 'Title & Description', 'Category', 'Priority', 'Status', 'Assigned To', 'Due Date', 'GPS Location'],
               data: items.asMap().entries.map((entry) {
                 final idx = entry.key + 1;

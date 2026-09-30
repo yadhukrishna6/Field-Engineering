@@ -19,7 +19,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
-  String _statusMessage = 'Initializing offline storage engines...';
+  final String _statusMessage = 'Initializing offline storage engines...';
 
   @override
   void initState() {
