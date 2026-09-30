@@ -14,6 +14,7 @@ import '../../features/issues/presentation/screens/issues_screen.dart';
 import '../../features/inspections/presentation/screens/inspections_screen.dart';
 import '../../features/inspections/presentation/screens/inspection_details_screen.dart';
 import '../../features/equipment/presentation/screens/equipment_screen.dart';
+import '../../features/equipment/presentation/screens/qr_scanner_screen.dart';
 import '../../features/offline_manager/presentation/screens/offline_download_manager_screen.dart';
 import '../../features/offline_manager/presentation/screens/offline_data_screen.dart';
 import '../../features/calculations/presentation/screens/calculations_screen.dart';
@@ -21,6 +22,7 @@ import '../../features/takeoff/presentation/screens/takeoff_screen.dart';
 import '../../features/reports/presentation/screens/reports_screen.dart';
 import '../../features/sync/presentation/screens/sync_center_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
+import '../../features/settings/presentation/screens/diagnostics_screen.dart';
 import '../../shared/widgets/tablet_scaffold.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
@@ -86,6 +88,13 @@ final GoRouter appRouter = GoRouter(
         final inspectionId = state.pathParameters['id'] ?? '';
         return InspectionDetailsScreen(inspectionId: inspectionId);
       },
+    ),
+
+    // 6. QR / Barcode Fullscreen Scanner
+    GoRoute(
+      path: '/qr-scanner',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const EquipmentQrScannerScreen(),
     ),
 
     // Tablet Shell Route (Persistent Navigation Rail / Sidebar & Top Bar)
@@ -171,6 +180,12 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: '/offline-data',
           builder: (context, state) => const OfflineDataScreen(),
+        ),
+
+        // Phase 6: Diagnostics & Database Health
+        GoRoute(
+          path: '/diagnostics',
+          builder: (context, state) => const DiagnosticsScreen(),
         ),
 
         // Field Reports Generator

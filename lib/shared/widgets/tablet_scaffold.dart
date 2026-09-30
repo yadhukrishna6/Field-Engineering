@@ -388,6 +388,28 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
                       ),
                       const SizedBox(width: 12),
 
+                      // Phase 6: Fast QR / Barcode Equipment Scanner Action
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.cyanAccent,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.qr_code_scanner_rounded, size: 16),
+                        label: const Text('SCAN TAG', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                        onPressed: () => context.push('/qr-scanner'),
+                      ),
+                      const SizedBox(width: 12),
+
+                      // Phase 6: System Diagnostics & DB Integrity
+                      IconButton(
+                        icon: const Icon(Icons.monitor_heart_rounded, color: Colors.cyanAccent, size: 20),
+                        tooltip: 'System Diagnostics & DB Health',
+                        onPressed: () => context.go('/diagnostics'),
+                      ),
+                      const SizedBox(width: 6),
+
                       // Quick theme toggle
                       IconButton(
                         icon: Icon(

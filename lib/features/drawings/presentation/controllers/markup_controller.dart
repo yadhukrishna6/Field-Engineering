@@ -841,6 +841,50 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
     _scheduleAutosave();
   }
 
+  void addEngineeringSymbol(
+    Point2D position, {
+    required String symbolId,
+    required String name,
+    required String tag,
+    required Color color,
+    double scale = 1.0,
+    double rotation = 0.0,
+    bool isStamp = false,
+  }) {
+    final width = (isStamp ? 0.22 : 0.08) * scale;
+    final height = (isStamp ? 0.09 : 0.06) * scale;
+
+    final newMarkup = Markup(
+      id: _uuid.v4(),
+      drawingId: _drawingId,
+      pageNumber: state.currentPage,
+      layer: isStamp ? DrawingLayer.inspection : DrawingLayer.markup,
+      type: isStamp ? MarkupType.stamp : MarkupType.text,
+      color: color,
+      strokeWidth: 2.0,
+      opacity: 1.0,
+      points: [position],
+      bounds: Rect.fromLTWH(position.x, position.y, width, height),
+      text: isStamp ? name : '[$tag] $name',
+      fontSize: 12.0 * scale,
+      metadata: {
+        'symbolId': symbolId,
+        'tag': tag,
+        'scale': scale,
+        'rotation': rotation,
+        'isSymbol': true,
+      },
+      createdBy: 'Lead Field Engineer',
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    _pushUndoState();
+    final updated = List<Markup>.from(state.markups)..add(newMarkup);
+    state = state.copyWith(markups: updated, hasUnsavedChanges: true);
+    _scheduleAutosave();
+  }
+
   // --- Selection & Transform Operations ---
 
   void selectMarkup(String? id) {

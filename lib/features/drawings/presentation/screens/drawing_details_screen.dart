@@ -8,6 +8,7 @@ import '../../domain/models/drawing_type.dart';
 import '../../domain/models/markup.dart';
 import '../../domain/models/drawing_calibration.dart';
 import '../../domain/models/drawing_revision.dart';
+import '../../domain/models/as_built_lifecycle.dart';
 import '../controllers/drawings_controller.dart';
 import '../controllers/markup_controller.dart';
 import '../providers/revisions_provider.dart';
@@ -17,6 +18,12 @@ import '../widgets/layer_management_panel.dart';
 import '../widgets/thumbnail_navigation_drawer.dart';
 import '../widgets/calibration_dialog.dart';
 import '../widgets/count_tool_dialog.dart';
+import '../widgets/engineering_symbols_drawer.dart';
+import '../widgets/drawing_split_view.dart';
+import '../widgets/markup_search_filter_bar.dart';
+import '../../../ai/presentation/widgets/ai_copilot_sheet.dart';
+import '../../../../shared/widgets/digital_signature_pad.dart';
+import '../../../../core/reliability/crash_recovery_service.dart';
 import '../../../../core/theme/color_palette.dart';
 import '../../../../core/storage/storage_models.dart';
 import '../../../../shared/widgets/loading_state_view.dart';
@@ -39,11 +46,41 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
   bool _showInspector = false;
   bool _showLayerPanel = false;
   bool _showThumbnailDrawer = false;
+  bool _showSearchFilterBar = false;
+
+  // Phase 6 State
+  SplitPanelType _activeSplitPanel = SplitPanelType.none;
+  AsBuiltStage _currentAsBuiltStage = AsBuiltStage.fieldMarkup;
+  String _searchFilterQuery = '';
+  String? _selectedFilterLayer;
+  String? _selectedFilterDiscipline;
+
+  @override
+  void initState() {
+    super.initState();
+    _transformationController.addListener(_onCanvasTransformChanged);
+  }
 
   @override
   void dispose() {
+    _transformationController.removeListener(_onCanvasTransformChanged);
     _transformationController.dispose();
     super.dispose();
+  }
+
+  void _onCanvasTransformChanged() {
+    final matrix = _transformationController.value;
+    final zoom = matrix.getMaxScaleOnAxis();
+    final translation = matrix.getTranslation();
+
+    CrashRecoveryService().autosaveDrawingSession(
+      drawingId: widget.drawingId,
+      pageNumber: ref.read(markupControllerProvider(widget.drawingId)).currentPage,
+      zoomScale: zoom,
+      panOffsetX: translation.x,
+      panOffsetY: translation.y,
+      activeTool: ref.read(markupControllerProvider(widget.drawingId)).selectedTool?.name ?? 'select',
+    );
   }
 
   void _resetZoom() {
@@ -114,7 +151,6 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                 ElevatedButton(
                   onPressed: () {
                     if (textController.text.trim().isNotEmpty) {
-                      // Add to center of page
                       controller.addTextCallout(
                         const Point2D(0.4, 0.45),
                         textController.text.trim(),
@@ -153,13 +189,13 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
             children: [
               TextField(
                 controller: tagController,
-                decoration: const InputDecoration(labelText: 'Issue Punch Tag *'),
+                decoration: const InputDecoration(labelText: 'Punch Item Tag / ID'),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: titleController,
                 maxLines: 2,
-                decoration: const InputDecoration(labelText: 'Non-Conformance / Action Item *'),
+                decoration: const InputDecoration(labelText: 'Issue Description'),
               ),
             ],
           ),
@@ -171,16 +207,14 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
               onPressed: () {
-                if (tagController.text.trim().isNotEmpty) {
-                  controller.addIssuePin(
-                    const Point2D(0.5, 0.5),
-                    issueTag: tagController.text.trim(),
-                    title: titleController.text.trim(),
-                  );
-                  Navigator.of(context).pop();
-                }
+                controller.addIssuePin(
+                  const Point2D(0.5, 0.5),
+                  issueTag: tagController.text.trim(),
+                  title: titleController.text.trim(),
+                );
+                Navigator.of(context).pop();
               },
-              child: const Text('Place Issue Pin', style: TextStyle(color: Colors.white)),
+              child: const Text('Pin to Center', style: TextStyle(color: Colors.white)),
             ),
           ],
         );
@@ -189,17 +223,16 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
   }
 
   void _showAddPhotoDialog(MarkupController controller) {
-    final captionController = TextEditingController(text: 'Weld joint W-04 visual inspection photo');
-
+    final captionController = TextEditingController(text: 'As-built pipe spool tie-in inspection');
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: const Row(
             children: [
-              Icon(Icons.photo_camera_rounded, color: Colors.amberAccent),
+              Icon(Icons.camera_alt_rounded, color: Colors.amberAccent),
               SizedBox(width: 8),
-              Text('Pin Field Inspection Photo'),
+              Text('Attach Site Photo Pin'),
             ],
           ),
           content: Column(
@@ -208,14 +241,6 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
               TextField(
                 controller: captionController,
                 decoration: const InputDecoration(labelText: 'Photo Caption / Location Note'),
-              ),
-              const SizedBox(height: 16),
-              const Row(
-                children: [
-                  Icon(Icons.check_circle_outline, color: AppColors.online, size: 16),
-                  SizedBox(width: 8),
-                  Text('Photo linked to local device camera cache', style: TextStyle(fontSize: 12)),
-                ],
               ),
             ],
           ),
@@ -228,8 +253,8 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade800),
               onPressed: () {
                 controller.addPhotoPin(
-                  const Point2D(0.5, 0.5),
-                  photoPath: 'photo_local_cache.jpg',
+                  const Point2D(0.35, 0.6),
+                  photoPath: '/storage/offline/photos/img_tiein_01.jpg',
                   caption: captionController.text.trim(),
                 );
                 Navigator.of(context).pop();
@@ -243,69 +268,120 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
   }
 
   void _showAddStampDialog(MarkupController controller) {
-    String selectedStamp = '★ APPROVED FOR CONSTRUCTION ★';
-    Color stampColor = const Color(0xFFD32F2F);
+    setState(() {
+      _activeSplitPanel = SplitPanelType.symbols;
+    });
+  }
 
+  void _showAsBuiltLifecycleDialog() {
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setDialogState) {
+          builder: (context, setDlgState) {
             return AlertDialog(
+              backgroundColor: const Color(0xFF171D27),
               title: const Row(
                 children: [
-                  Icon(Icons.verified_outlined, color: AppColors.online),
-                  SizedBox(width: 8),
-                  Text('Apply Engineering Stamp'),
+                  Icon(Icons.verified_user_rounded, color: Colors.cyanAccent),
+                  SizedBox(width: 10),
+                  Text('As-Built Certification Lifecycle', style: TextStyle(color: Colors.white, fontSize: 16)),
                 ],
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButtonFormField<String>(
-                    value: selectedStamp,
-                    decoration: const InputDecoration(labelText: 'Stamp Type'),
-                    items: [
-                      '★ APPROVED FOR CONSTRUCTION ★',
-                      '★ AS-BUILT CERTIFIED ★',
-                      '★ HOLD FOR CLARIFICATION ★',
-                      '★ VOID / SUPERSEDED ★',
-                    ].map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)))).toList(),
-                    onChanged: (v) {
-                      if (v != null) {
-                        setDialogState(() {
-                          selectedStamp = v;
-                          if (v.contains('APPROVED')) {
-                            stampColor = const Color(0xFFD32F2F);
-                          } else if (v.contains('AS-BUILT')) {
-                            stampColor = const Color(0xFF2E7D32);
-                          } else if (v.contains('HOLD')) {
-                            stampColor = const Color(0xFFFF6F00);
-                          } else {
-                            stampColor = Colors.grey;
-                          }
-                        });
-                      }
-                    },
-                  ),
-                ],
+              content: SizedBox(
+                width: 480,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Stage progression requires engineer sign-off & cryptographic audit log.',
+                      style: TextStyle(color: Colors.white60, fontSize: 12),
+                    ),
+                    const SizedBox(height: 16),
+                    ...AsBuiltStage.values.map((stage) {
+                      final isCurrent = stage == _currentAsBuiltStage;
+                      final isPassed = stage.index < _currentAsBuiltStage.index;
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: isCurrent ? stage.color.withOpacity(0.18) : const Color(0xFF131720),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isCurrent ? stage.color : (isPassed ? Colors.greenAccent.withOpacity(0.4) : Colors.white10),
+                            width: isCurrent ? 1.5 : 1.0,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isPassed ? Icons.check_circle_rounded : stage.icon,
+                              color: isPassed ? Colors.greenAccent : stage.color,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                stage.displayName,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            if (isCurrent)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: stage.color,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'CURRENT',
+                                  style: TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close', style: TextStyle(color: Colors.white70)),
                 ),
-                ElevatedButton(
-                  onPressed: () {
-                    controller.addFieldStamp(
-                      const Point2D(0.05, 0.85),
-                      stampText: selectedStamp,
-                      stampColor: stampColor,
-                    );
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Apply Stamp'),
-                ),
+                if (_currentAsBuiltStage.nextStage != null)
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _currentAsBuiltStage.nextStage!.color,
+                      foregroundColor: Colors.black,
+                    ),
+                    icon: const Icon(Icons.draw_rounded, size: 16),
+                    label: Text('Sign & Advance to ${_currentAsBuiltStage.nextStage!.shortCode}'),
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      final sigResult = await DigitalSignaturePadDialog.show(
+                        context,
+                        documentTitle: 'Advance Drawing to ${_currentAsBuiltStage.nextStage!.displayName}',
+                        authorRole: 'Lead Field Engineer',
+                      );
+                      if (sigResult != null && mounted) {
+                        setState(() {
+                          _currentAsBuiltStage = _currentAsBuiltStage.nextStage!;
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Drawing successfully advanced to ${_currentAsBuiltStage.displayName}'),
+                          backgroundColor: Colors.green,
+                        ));
+                      }
+                    },
+                  ),
               ],
             );
           },
@@ -425,7 +501,37 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 8),
+
+                          // Phase 6 As-Built Lifecycle Badge
+                          InkWell(
+                            onTap: _showAsBuiltLifecycleDialog,
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: _currentAsBuiltStage.color.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: _currentAsBuiltStage.color, width: 1),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(_currentAsBuiltStage.icon, size: 12, color: _currentAsBuiltStage.color),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    _currentAsBuiltStage.shortCode,
+                                    style: TextStyle(
+                                      color: _currentAsBuiltStage.color,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
 
                           // Autosave Status Badge
                           Container(
@@ -471,6 +577,46 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                     ],
                   ),
                   actions: [
+                    // Symbols & Stamps Split Panel Toggle
+                    IconButton(
+                      icon: const Icon(Icons.architecture_rounded, color: Colors.cyanAccent),
+                      tooltip: 'P&ID Symbols & Certification Stamps',
+                      onPressed: () {
+                        setState(() {
+                          _activeSplitPanel = _activeSplitPanel == SplitPanelType.symbols
+                              ? SplitPanelType.none
+                              : SplitPanelType.symbols;
+                        });
+                      },
+                    ),
+
+                    // AI Copilot Split Panel Toggle
+                    IconButton(
+                      icon: const Icon(Icons.auto_awesome_rounded, color: Colors.purpleAccent),
+                      tooltip: 'AI Engineering Copilot (OCR & Voice)',
+                      onPressed: () {
+                        setState(() {
+                          _activeSplitPanel = _activeSplitPanel == SplitPanelType.copilot
+                              ? SplitPanelType.none
+                              : SplitPanelType.copilot;
+                        });
+                      },
+                    ),
+
+                    // Search & Filter Toggle
+                    IconButton(
+                      icon: Icon(
+                        _showSearchFilterBar ? Icons.filter_alt_off_rounded : Icons.search_rounded,
+                        color: _showSearchFilterBar ? Colors.cyanAccent : Colors.white70,
+                      ),
+                      tooltip: 'Search Markups & Filter Layers',
+                      onPressed: () {
+                        setState(() {
+                          _showSearchFilterBar = !_showSearchFilterBar;
+                        });
+                      },
+                    ),
+
                     // Sheet Selector Button
                     TextButton.icon(
                       style: TextButton.styleFrom(
@@ -485,7 +631,7 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                         });
                       },
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 4),
 
                     // Layer Panel Toggle
                     IconButton(
@@ -507,6 +653,8 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                           _showRevisionHistoryModal(context, drawing);
                         } else if (action == 'compare') {
                           context.push('/drawings/${drawing.id}/compare', extra: drawing);
+                        } else if (action == 'asbuilt') {
+                          _showAsBuiltLifecycleDialog();
                         } else if (action == 'clear') {
                           _confirmClearPage(context, markupController);
                         } else if (action == 'print') {
@@ -520,6 +668,16 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                         }
                       },
                       itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'asbuilt',
+                          child: Row(
+                            children: [
+                              Icon(Icons.verified_user_rounded, size: 18, color: Colors.greenAccent),
+                              SizedBox(width: 8),
+                              Text('As-Built Lifecycle Workflow'),
+                            ],
+                          ),
+                        ),
                         const PopupMenuItem(
                           value: 'revisions',
                           child: Row(
@@ -575,237 +733,318 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                     const SizedBox(width: 8),
                   ],
                 ),
-          body: Stack(
-            children: [
-              // Main Drawing Canvas Stack
-              Row(
-                children: [
-                  Expanded(
-                    flex: _showInspector ? 7 : 10,
-                    child: Container(
-                      color: isDark ? const Color(0xFF0F1218) : const Color(0xFFDDE3EA),
-                      child: DrawingCanvasView(
-                        drawing: drawing,
-                        viewerState: viewerState,
-                        controller: markupController,
-                        transformationController: _transformationController,
-                        onDoubleTapReset: _resetZoom,
-                      ),
-                    ),
-                  ),
-
-                  // Optional Engineering Inspector Sidebar Panel
-                  if (_showInspector && !viewerState.isFullscreen)
-                    Container(
-                      width: 320,
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-                        border: Border(
-                          left: BorderSide(
-                            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                            width: 1,
-                          ),
+          body: DrawingSplitView(
+            activePanelType: _activeSplitPanel,
+            onPanelTypeChanged: (type) => setState(() => _activeSplitPanel = type),
+            sidePanelWidget: _buildSidePanelWidget(markupController, drawing.id, viewerState.currentPage),
+            drawingWidget: Stack(
+              children: [
+                // Main Drawing Canvas Stack
+                Row(
+                  children: [
+                    Expanded(
+                      flex: _showInspector ? 7 : 10,
+                      child: Container(
+                        color: isDark ? const Color(0xFF0F1218) : const Color(0xFFDDE3EA),
+                        child: DrawingCanvasView(
+                          drawing: drawing,
+                          viewerState: viewerState,
+                          controller: markupController,
+                          transformationController: _transformationController,
+                          onDoubleTapReset: _resetZoom,
                         ),
                       ),
-                      child: ListView(
-                        padding: const EdgeInsets.all(18),
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Row(
-                                children: [
-                                  Icon(Icons.info_outline_rounded, color: AppColors.safetyOrange, size: 20),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'Blueprint Inspector',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                  ),
-                                ],
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.close_rounded, size: 18),
-                                onPressed: () => setState(() => _showInspector = false),
-                              ),
-                            ],
+                    ),
+
+                    // Optional Engineering Inspector Sidebar Panel
+                    if (_showInspector && !viewerState.isFullscreen)
+                      Container(
+                        width: 320,
+                        decoration: BoxDecoration(
+                          color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                          border: Border(
+                            left: BorderSide(
+                              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                              width: 1,
+                            ),
                           ),
-                          const SizedBox(height: 12),
-                          _buildInspectorCard(
-                            title: 'DRAWING PARAMETERS',
-                            children: [
-                              _buildDetailRow('Drawing Number', drawing.drawingNumber),
-                              _buildDetailRow('Discipline', '${drawing.drawingType.displayName} (${drawing.drawingType.code})'),
-                              _buildDetailRow('Active Sheet', 'Sheet ${viewerState.currentPage} of ${drawing.pageCount}'),
-                              _buildDetailRow('Revision', drawing.revision),
-                              _buildDetailRow('File Size', StorageUsage.formatBytes(drawing.fileSize)),
-                              _buildDetailRow('Offline Storage', 'SQLite + Vector PDF Engine'),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          _buildInspectorCard(
-                            title: 'SCALE & CALIBRATION',
-                            children: [
-                              _buildDetailRow(
-                                'Status',
-                                viewerState.calibration != null ? 'Calibrated ✓' : 'Uncalibrated',
-                              ),
-                              if (viewerState.calibration != null) ...[
-                                _buildDetailRow(
-                                  'Known Dimension',
-                                  '${viewerState.calibration!.knownDistance} ${viewerState.calibration!.unit.symbol}',
+                        ),
+                        child: ListView(
+                          padding: const EdgeInsets.all(18),
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(Icons.info_outline_rounded, color: AppColors.safetyOrange, size: 20),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Blueprint Inspector',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                    ),
+                                  ],
                                 ),
-                                _buildDetailRow(
-                                  'Scale Unit',
-                                  viewerState.calibration!.unit.displayName,
+                                IconButton(
+                                  icon: const Icon(Icons.close_rounded, size: 18),
+                                  onPressed: () => setState(() => _showInspector = false),
                                 ),
                               ],
-                              _buildDetailRow(
-                                'Measurements on Sheet',
-                                '${viewerState.measurements.where((m) => m.type.name != 'count').length}',
-                              ),
-                              _buildDetailRow(
-                                'Count Pins on Sheet',
-                                '${viewerState.measurements.where((m) => m.type.name == 'count').length}',
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          _buildInspectorCard(
-                            title: 'MARKUP LAYER STATISTICS',
-                            children: [
-                              _buildDetailRow('Total Markups on Sheet', '${viewerState.activePageMarkups.length} items'),
-                              _buildDetailRow('Revision Clouds', '${viewerState.activePageMarkups.where((m) => m.type == MarkupType.revisionCloud).length}'),
-                              _buildDetailRow('Dimensions & Rulers', '${viewerState.getLayerCount(DrawingLayer.measurement)}'),
-                              _buildDetailRow('Punchlist Pins', '${viewerState.getLayerCount(DrawingLayer.issue)}'),
-                              _buildDetailRow('Site Photo Callouts', '${viewerState.getLayerCount(DrawingLayer.photo)}'),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-
-              // Top Floating Markup Toolbar
-              Positioned(
-                top: 16,
-                left: 20,
-                right: 20,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    MarkupToolbar(
-                      viewerState: viewerState,
-                      controller: markupController,
-                      onToggleLayers: () {
-                        setState(() {
-                          _showLayerPanel = !_showLayerPanel;
-                          _showThumbnailDrawer = false;
-                        });
-                      },
-                      onFitToScreen: _fitToScreen,
-                      onAddText: () => _showAddTextDialog(markupController),
-                      onAddIssue: () => _showAddIssueDialog(markupController),
-                      onAddPhoto: () => _showAddPhotoDialog(markupController),
-                      onAddStamp: () => _showAddStampDialog(markupController),
-                      onCalibrate: () => _handleCalibration(markupController, viewerState),
-                      onOpenCountTool: () => CountToolDialog.show(
-                        context,
-                        controller: markupController,
-                        viewerState: viewerState,
-                      ),
-                    ),
-                    if (viewerState.isCalibrating) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: AppColors.safetyOrange,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
                             ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.straighten_rounded, color: Colors.white, size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              viewerState.calibrationPoints.length < 2
-                                  ? 'Calibration: Tap Point ${viewerState.calibrationPoints.length + 1} of 2 on Drawing'
-                                  : '2 Points Selected! Enter dimension to finish.',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
+                            const SizedBox(height: 12),
+                            _buildInspectorCard(
+                              title: 'DRAWING PARAMETERS',
+                              children: [
+                                _buildDetailRow('Drawing Number', drawing.drawingNumber),
+                                _buildDetailRow('Discipline', '${drawing.drawingType.displayName} (${drawing.drawingType.code})'),
+                                _buildDetailRow('Active Sheet', 'Sheet ${viewerState.currentPage} of ${drawing.pageCount}'),
+                                _buildDetailRow('Revision', drawing.revision),
+                                _buildDetailRow('As-Built Stage', _currentAsBuiltStage.displayName),
+                                _buildDetailRow('File Size', StorageUsage.formatBytes(drawing.fileSize)),
+                                _buildDetailRow('Offline Storage', 'SQLite + Vector PDF Engine'),
+                              ],
                             ),
-                            const SizedBox(width: 12),
-                            if (viewerState.calibrationPoints.length >= 2)
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: AppColors.safetyOrange,
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            const SizedBox(height: 14),
+                            _buildInspectorCard(
+                              title: 'SCALE & CALIBRATION',
+                              children: [
+                                _buildDetailRow(
+                                  'Status',
+                                  viewerState.calibration != null ? 'Calibrated ✓' : 'Uncalibrated',
                                 ),
-                                onPressed: () => CalibrationDialog.show(
-                                  context,
-                                  controller: markupController,
-                                  viewerState: viewerState,
+                                if (viewerState.calibration != null) ...[
+                                  _buildDetailRow(
+                                    'Known Dimension',
+                                    '${viewerState.calibration!.knownDistance} ${viewerState.calibration!.unit.symbol}',
+                                  ),
+                                  _buildDetailRow(
+                                    'Scale Unit',
+                                    viewerState.calibration!.unit.displayName,
+                                  ),
+                                ],
+                                _buildDetailRow(
+                                  'Measurements on Sheet',
+                                  '${viewerState.measurements.where((m) => m.type.name != 'count').length}',
                                 ),
-                                child: const Text('Set Distance', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                              ),
-                            const SizedBox(width: 6),
-                            IconButton(
-                              icon: const Icon(Icons.close, color: Colors.white, size: 18),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: markupController.cancelCalibration,
+                                _buildDetailRow(
+                                  'Count Pins on Sheet',
+                                  '${viewerState.measurements.where((m) => m.type.name == 'count').length}',
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            _buildInspectorCard(
+                              title: 'MARKUP LAYER STATISTICS',
+                              children: [
+                                _buildDetailRow('Total Markups on Sheet', '${viewerState.activePageMarkups.length} items'),
+                                _buildDetailRow('Revision Clouds', '${viewerState.activePageMarkups.where((m) => m.type == MarkupType.revisionCloud).length}'),
+                                _buildDetailRow('Dimensions & Rulers', '${viewerState.getLayerCount(DrawingLayer.measurement)}'),
+                                _buildDetailRow('Punchlist Pins', '${viewerState.getLayerCount(DrawingLayer.issue)}'),
+                                _buildDetailRow('Site Photo Callouts', '${viewerState.getLayerCount(DrawingLayer.photo)}'),
+                              ],
                             ),
                           ],
                         ),
                       ),
-                    ],
                   ],
                 ),
-              ),
 
-              // Layer Management Panel (Floating Flyout)
-              if (_showLayerPanel)
+                // Top Floating Markup Toolbar
                 Positioned(
-                  top: 76,
-                  right: 24,
-                  child: LayerManagementPanel(
-                    viewerState: viewerState,
-                    controller: markupController,
-                    onClose: () => setState(() => _showLayerPanel = false),
+                  top: 16,
+                  left: 20,
+                  right: 20,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      MarkupToolbar(
+                        viewerState: viewerState,
+                        controller: markupController,
+                        onToggleLayers: () {
+                          setState(() {
+                            _showLayerPanel = !_showLayerPanel;
+                            _showThumbnailDrawer = false;
+                          });
+                        },
+                        onFitToScreen: _fitToScreen,
+                        onAddText: () => _showAddTextDialog(markupController),
+                        onAddIssue: () => _showAddIssueDialog(markupController),
+                        onAddPhoto: () => _showAddPhotoDialog(markupController),
+                        onAddStamp: () => _showAddStampDialog(markupController),
+                        onCalibrate: () => _handleCalibration(markupController, viewerState),
+                        onOpenCountTool: () => CountToolDialog.show(
+                          context,
+                          controller: markupController,
+                          viewerState: viewerState,
+                        ),
+                      ),
+
+                      // Search & Filter Floating Bar
+                      if (_showSearchFilterBar) ...[
+                        const SizedBox(height: 8),
+                        MarkupSearchFilterBar(
+                          totalMarkupsCount: viewerState.activePageMarkups.length,
+                          filteredMarkupsCount: viewerState.activePageMarkups.length,
+                          onSearchChanged: (q) => setState(() => _searchFilterQuery = q),
+                          onLayerFilterChanged: (l) => setState(() => _selectedFilterLayer = l),
+                          onDisciplineFilterChanged: (d) => setState(() => _selectedFilterDiscipline = d),
+                          onClearFilters: () => setState(() {
+                            _searchFilterQuery = '';
+                            _selectedFilterLayer = null;
+                            _selectedFilterDiscipline = null;
+                          }),
+                        ),
+                      ],
+
+                      if (viewerState.isCalibrating) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.safetyOrange,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.straighten_rounded, color: Colors.white, size: 18),
+                              const SizedBox(width: 8),
+                              Text(
+                                viewerState.calibrationPoints.length < 2
+                                    ? 'Calibration: Tap Point ${viewerState.calibrationPoints.length + 1} of 2 on Drawing'
+                                    : '2 Points Selected! Enter dimension to finish.',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              if (viewerState.calibrationPoints.length >= 2)
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    foregroundColor: AppColors.safetyOrange,
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  onPressed: () => CalibrationDialog.show(
+                                    context,
+                                    controller: markupController,
+                                    viewerState: viewerState,
+                                  ),
+                                  child: const Text('Set Distance', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                ),
+                              const SizedBox(width: 6),
+                              IconButton(
+                                icon: const Icon(Icons.close, color: Colors.white, size: 18),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: markupController.cancelCalibration,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
 
-              // Thumbnail Navigation Drawer (Floating Flyout)
-              if (_showThumbnailDrawer)
-                Positioned(
-                  top: 76,
-                  left: 24,
-                  child: ThumbnailNavigationDrawer(
-                    drawing: drawing,
-                    viewerState: viewerState,
-                    controller: markupController,
-                    onClose: () => setState(() => _showThumbnailDrawer = false),
+                // Layer Management Panel (Floating Flyout)
+                if (_showLayerPanel)
+                  Positioned(
+                    top: 76,
+                    right: 24,
+                    child: LayerManagementPanel(
+                      viewerState: viewerState,
+                      controller: markupController,
+                      onClose: () => setState(() => _showLayerPanel = false),
+                    ),
                   ),
-                ),
-            ],
+
+                // Thumbnail Navigation Drawer (Floating Flyout)
+                if (_showThumbnailDrawer)
+                  Positioned(
+                    top: 76,
+                    left: 24,
+                    child: ThumbnailNavigationDrawer(
+                      drawing: drawing,
+                      viewerState: viewerState,
+                      controller: markupController,
+                      onClose: () => setState(() => _showThumbnailDrawer = false),
+                    ),
+                  ),
+              ],
+            ),
           ),
         );
       },
     );
+  }
+
+  Widget? _buildSidePanelWidget(MarkupController markupController, String drawingId, int pageNumber) {
+    switch (_activeSplitPanel) {
+      case SplitPanelType.symbols:
+        return EngineeringSymbolsDrawer(
+          onSymbolSelected: (symbol, customTag, scale, rotation) {
+            markupController.addEngineeringSymbol(
+              const Point2D(0.45, 0.45),
+              symbolId: symbol.id,
+              name: symbol.name,
+              tag: customTag,
+              color: symbol.defaultColor,
+              scale: scale,
+              rotation: rotation,
+              isStamp: symbol.isStamp,
+            );
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Stamped ${symbol.name} on Sheet $pageNumber'),
+              backgroundColor: symbol.defaultColor,
+            ));
+          },
+          onClose: () => setState(() => _activeSplitPanel = SplitPanelType.none),
+        );
+
+      case SplitPanelType.copilot:
+        return AiCopilotSheet(
+          drawingId: drawingId,
+          pageNumber: pageNumber,
+          onLabelSelected: (label) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('AI Focused tag: ${label.text} (${label.tagType})'),
+              backgroundColor: Colors.purpleAccent,
+            ));
+          },
+          onCreateIssueFromAi: (issueData) {
+            markupController.addIssuePin(
+              const Point2D(0.5, 0.5),
+              issueTag: issueData['category'] == 'Piping' ? 'PNC-AI-101' : 'ELEC-AI-202',
+              title: issueData['title'] ?? 'AI Extracted Issue',
+            );
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('AI Issue successfully added to Punch List!'),
+              backgroundColor: Colors.green,
+            ));
+          },
+          onClose: () => setState(() => _activeSplitPanel = SplitPanelType.none),
+        );
+
+      case SplitPanelType.none:
+      case SplitPanelType.issues:
+      case SplitPanelType.inspections:
+      case SplitPanelType.equipment:
+      case SplitPanelType.takeoff:
+      case SplitPanelType.asBuiltWorkflow:
+        return null;
+    }
   }
 
   Widget _buildInspectorCard({required String title, required List<Widget> children}) {
@@ -1002,4 +1241,3 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
     );
   }
 }
-
