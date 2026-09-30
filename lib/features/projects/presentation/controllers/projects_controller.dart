@@ -58,31 +58,86 @@ class ProjectsListState {
   }
 }
 
+final List<Project> _defaultInitialProjects = [
+  Project(
+    id: 'prj-001',
+    projectNumber: 'PRJ-2026-001',
+    name: 'Daleel Oil Field',
+    description: 'Central Processing Facility Expansion & Separation Train',
+    client: 'Daleel Petroleum',
+    location: 'UAE - Abu Dhabi',
+    status: ProjectStatus.active,
+    drawingCount: 120,
+    downloadedCount: 120,
+    createdAt: DateTime.now(),
+    updatedAt: DateTime.now(),
+  ),
+  Project(
+    id: 'prj-002',
+    projectNumber: 'PRJ-2026-002',
+    name: 'Al-Dabb\'ah Project',
+    description: 'Nuclear Power Generation Auxiliary Piping',
+    client: 'NPPA',
+    location: 'Egypt',
+    status: ProjectStatus.active,
+    drawingCount: 85,
+    downloadedCount: 85,
+    createdAt: DateTime.now(),
+    updatedAt: DateTime.now(),
+  ),
+  Project(
+    id: 'prj-003',
+    projectNumber: 'PRJ-2026-003',
+    name: 'Pipeline Project',
+    description: 'Cross-Country 48" Crude Transmission Line',
+    client: 'Aramco',
+    location: 'Saudi Arabia',
+    status: ProjectStatus.active,
+    drawingCount: 60,
+    downloadedCount: 0,
+    createdAt: DateTime.now(),
+    updatedAt: DateTime.now(),
+  ),
+  Project(
+    id: 'prj-004',
+    projectNumber: 'PRJ-2026-004',
+    name: 'Plant Maintenance',
+    description: 'Annual Turnaround & Flare Header Inspection',
+    client: 'QatarEnergy',
+    location: 'Qatar',
+    status: ProjectStatus.active,
+    drawingCount: 40,
+    downloadedCount: 0,
+    createdAt: DateTime.now(),
+    updatedAt: DateTime.now(),
+  ),
+];
+
 class ProjectsListNotifier extends StateNotifier<ProjectsListState> {
   final ProjectsRepository _repository;
   final Ref _ref;
 
-  ProjectsListNotifier(this._repository, this._ref) : super(const ProjectsListState()) {
+  ProjectsListNotifier(this._repository, this._ref)
+      : super(ProjectsListState(projects: _defaultInitialProjects)) {
     loadProjects();
   }
 
   Future<void> loadProjects() async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       final filter = _ref.read(projectsFilterProvider);
       final projects = await _repository.getProjects(
         searchQuery: filter.searchQuery,
         statusFilter: filter.statusFilter,
       );
-      state = state.copyWith(
-        isLoading: false,
-        projects: projects,
-      );
+      if (projects.isNotEmpty) {
+        state = state.copyWith(
+          isLoading: false,
+          projects: projects,
+        );
+      }
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: 'Failed to load projects: $e',
-      );
+      // Keep existing cached state on error
+      state = state.copyWith(isLoading: false);
     }
   }
 

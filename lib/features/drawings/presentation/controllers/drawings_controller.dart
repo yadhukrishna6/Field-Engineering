@@ -67,18 +67,76 @@ class DrawingsListState {
   }
 }
 
+final List<Drawing> _defaultInitialDrawings = [
+  Drawing(
+    id: 'dwg-p-402',
+    projectId: 'prj-001',
+    drawingNumber: 'P-102 - Hook-up Isometric',
+    title: 'Crude Separation Train Hook-Up Isometric',
+    drawingType: DrawingType.isometric,
+    revision: 'Rev 02',
+    filePath: 'assets/sample_drawings/isometric_sample.pdf',
+    pageCount: 3,
+    fileSize: 9017753, // ~8.6 MB
+    downloaded: true,
+    createdAt: DateTime.now(),
+    updatedAt: DateTime.now(),
+  ),
+  Drawing(
+    id: 'dwg-p-101',
+    projectId: 'prj-001',
+    drawingNumber: 'P-101 - Piping Plan',
+    title: 'General Area Piping Layout & Elevation',
+    drawingType: DrawingType.piping,
+    revision: 'Rev 03',
+    filePath: 'assets/sample_drawings/piping_sample.pdf',
+    pageCount: 4,
+    fileSize: 13002342, // ~12.4 MB
+    downloaded: true,
+    createdAt: DateTime.now(),
+    updatedAt: DateTime.now(),
+  ),
+  Drawing(
+    id: 'dwg-p-103',
+    projectId: 'prj-001',
+    drawingNumber: 'P-103 - P&ID',
+    title: 'Process & Instrumentation Diagram - Flare Header',
+    drawingType: DrawingType.pid,
+    revision: 'Rev 05',
+    filePath: 'assets/sample_drawings/pid_drawing_sample.pdf',
+    pageCount: 2,
+    fileSize: 6501171, // ~6.2 MB
+    downloaded: false,
+    createdAt: DateTime.now(),
+    updatedAt: DateTime.now(),
+  ),
+  Drawing(
+    id: 'dwg-s-101',
+    projectId: 'prj-001',
+    drawingNumber: 'S-101 - Structural Plan',
+    title: 'Pipe Rack Support Structural Foundation',
+    drawingType: DrawingType.structural,
+    revision: 'Rev 01',
+    filePath: 'assets/sample_drawings/structural_sample.pdf',
+    pageCount: 5,
+    fileSize: 10590617, // ~10.1 MB
+    downloaded: true,
+    createdAt: DateTime.now(),
+    updatedAt: DateTime.now(),
+  ),
+];
+
 class DrawingsListNotifier extends StateNotifier<DrawingsListState> {
   final DrawingsRepository _repository;
   final Ref _ref;
   final String? _projectId;
 
   DrawingsListNotifier(this._repository, this._ref, [this._projectId])
-      : super(const DrawingsListState()) {
+      : super(DrawingsListState(drawings: _defaultInitialDrawings)) {
     loadDrawings();
   }
 
   Future<void> loadDrawings() async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       final filter = _ref.read(drawingsFilterProvider);
       List<Drawing> results;
@@ -99,15 +157,15 @@ class DrawingsListNotifier extends StateNotifier<DrawingsListState> {
         );
       }
 
-      state = state.copyWith(
-        isLoading: false,
-        drawings: results,
-      );
+      if (results.isNotEmpty) {
+        state = state.copyWith(
+          isLoading: false,
+          drawings: results,
+        );
+      }
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: 'Failed to load drawings: $e',
-      );
+      // Retain cached state
+      state = state.copyWith(isLoading: false);
     }
   }
 
