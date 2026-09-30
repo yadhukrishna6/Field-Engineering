@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../domain/models/markup.dart';
+import '../../domain/models/measurement.dart';
+import '../../domain/models/drawing_calibration.dart';
 import '../controllers/markup_controller.dart';
 import '../../../../core/theme/color_palette.dart';
 
@@ -12,6 +14,8 @@ class MarkupToolbar extends StatelessWidget {
   final VoidCallback? onAddIssue;
   final VoidCallback? onAddPhoto;
   final VoidCallback? onAddStamp;
+  final VoidCallback? onCalibrate;
+  final VoidCallback? onOpenCountTool;
 
   const MarkupToolbar({
     super.key,
@@ -23,11 +27,14 @@ class MarkupToolbar extends StatelessWidget {
     this.onAddIssue,
     this.onAddPhoto,
     this.onAddStamp,
+    this.onCalibrate,
+    this.onOpenCountTool,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isCalibrated = viewerState.calibration != null;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -57,6 +64,10 @@ class MarkupToolbar extends StatelessWidget {
             _buildVerticalDivider(isDark),
             const SizedBox(width: 8),
 
+            // Calibration Button & Status Pill
+            _buildCalibrationButton(context, isCalibrated),
+            const SizedBox(width: 6),
+
             // Tool Selectors (only if in drawing mode)
             if (viewerState.isDrawingMode) ...[
               _buildToolButton(MarkupType.pen),
@@ -71,7 +82,13 @@ class MarkupToolbar extends StatelessWidget {
                 tooltip: 'Add Text Callout',
                 onTap: onAddText,
               ),
-              _buildToolButton(MarkupType.measurement),
+
+              // Engineering Measurement Tools Suite Menu
+              _buildMeasurementToolsMenu(context),
+
+              // Component Count Tool Button
+              _buildCountToolButton(context),
+
               _buildActionToolButton(
                 icon: Icons.report_problem_rounded,
                 tooltip: 'Add Punchlist Pin',
@@ -213,8 +230,148 @@ class MarkupToolbar extends StatelessWidget {
     );
   }
 
+  Widget _buildCalibrationButton(BuildContext context, bool isCalibrated) {
+    final isCalibrating = viewerState.isCalibrating;
+
+    return Tooltip(
+      message: isCalibrated
+          ? 'Calibrated: 1 px = ${viewerState.calibration?.formattedScale(viewerState.calibration?.unit.symbol ?? 'mm')}\nTap to Re-calibrate'
+          : 'Drawing scale not calibrated. Tap to calibrate scale.',
+      child: InkWell(
+        onTap: onCalibrate,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: isCalibrating
+                ? AppColors.safetyOrange.withOpacity(0.2)
+                : (isCalibrated ? AppColors.online.withOpacity(0.15) : Colors.grey.withOpacity(0.15)),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isCalibrating
+                  ? AppColors.safetyOrange
+                  : (isCalibrated ? AppColors.online : Colors.grey.withOpacity(0.4)),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.straighten_rounded,
+                size: 16,
+                color: isCalibrating
+                    ? AppColors.safetyOrange
+                    : (isCalibrated ? AppColors.online : Colors.grey),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                isCalibrating
+                    ? 'Calibrating...'
+                    : (isCalibrated
+                        ? '${viewerState.calibration?.knownDistance.toStringAsFixed(0)} ${viewerState.calibration?.unit.symbol}'
+                        : 'Calibrate'),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isCalibrating
+                      ? AppColors.safetyOrange
+                      : (isCalibrated ? AppColors.online : Colors.grey),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMeasurementToolsMenu(BuildContext context) {
+    final isMeasurementMode = viewerState.isDrawingMode &&
+        (viewerState.selectedTool == MarkupType.measurement || viewerState.activeMeasurementType != null);
+    final activeType = viewerState.activeMeasurementType ?? MeasurementType.distance;
+
+    return PopupMenuButton<MeasurementType>(
+      tooltip: 'Engineering Measurement Tools',
+      initialValue: activeType,
+      offset: const Offset(0, 40),
+      icon: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: isMeasurementMode ? AppColors.safetyOrange.withOpacity(0.2) : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              activeType.icon,
+              size: 18,
+              color: isMeasurementMode ? AppColors.safetyOrange : null,
+            ),
+            const Icon(Icons.arrow_drop_down, size: 14),
+          ],
+        ),
+      ),
+      onSelected: (type) {
+        controller.selectMeasurementType(type);
+      },
+      itemBuilder: (context) => MeasurementType.values.map((type) {
+        return PopupMenuItem<MeasurementType>(
+          value: type,
+          child: Row(
+            children: [
+              Icon(type.icon, size: 18, color: AppColors.safetyOrange),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      type.displayName,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      type.description,
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              if (activeType == type && isMeasurementMode)
+                const Icon(Icons.check, size: 16, color: AppColors.safetyOrange),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildCountToolButton(BuildContext context) {
+    final isCountActive = viewerState.isDrawingMode &&
+        viewerState.activeMeasurementType == MeasurementType.count;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: IconButton(
+        icon: const Icon(Icons.pin_drop_rounded, size: 18),
+        color: isCountActive ? const Color(0xFF00E676) : null,
+        tooltip: isCountActive
+            ? 'Count Tool (${viewerState.activeCountLabel})'
+            : 'Component Count Tool',
+        style: isCountActive
+            ? IconButton.styleFrom(backgroundColor: const Color(0xFF00E676).withOpacity(0.15))
+            : null,
+        onPressed: onOpenCountTool,
+      ),
+    );
+  }
+
   Widget _buildToolButton(MarkupType tool) {
-    final isSelected = viewerState.isDrawingMode && viewerState.selectedTool == tool;
+    final isSelected = viewerState.isDrawingMode &&
+        viewerState.selectedTool == tool &&
+        viewerState.activeMeasurementType == null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -250,17 +407,18 @@ class MarkupToolbar extends StatelessWidget {
 
   Widget _buildColorPickerButton(BuildContext context) {
     return PopupMenuButton<Color>(
-      tooltip: 'Select Markup Color',
+      tooltip: 'Annotation Color',
+      offset: const Offset(0, 40),
       icon: Container(
-        width: 24,
-        height: 24,
+        width: 20,
+        height: 20,
         decoration: BoxDecoration(
-          color: viewerState.currentColor,
+          color: viewerState.activeColor,
           shape: BoxShape.circle,
           border: Border.all(color: Colors.white, width: 2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: viewerState.activeColor.withOpacity(0.5),
               blurRadius: 4,
             ),
           ],
@@ -268,24 +426,22 @@ class MarkupToolbar extends StatelessWidget {
       ),
       onSelected: (color) => controller.setColor(color),
       itemBuilder: (context) {
-        return kEngineeringColors.map((color) {
-          return PopupMenuItem(
-            value: color,
+        return DrawingColorPalette.engineeringPalette.map((c) {
+          return PopupMenuItem<Color>(
+            value: c.color,
             child: Row(
               children: [
                 Container(
-                  width: 20,
-                  height: 20,
+                  width: 18,
+                  height: 18,
                   decoration: BoxDecoration(
-                    color: color,
+                    color: c.color,
                     shape: BoxShape.circle,
+                    border: Border.all(color: Colors.grey.withOpacity(0.5)),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Text(
-                  _getColorName(color),
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                ),
+                const SizedBox(width: 12),
+                Text(c.name, style: const TextStyle(fontSize: 13)),
               ],
             ),
           );
@@ -295,46 +451,28 @@ class MarkupToolbar extends StatelessWidget {
   }
 
   Widget _buildStrokeWidthButton(BuildContext context) {
-    final widths = [1.0, 2.0, 3.0, 5.0, 8.0, 12.0];
-
     return PopupMenuButton<double>(
-      tooltip: 'Stroke Width',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: AppColors.darkBorder),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 14,
-              height: viewerState.strokeWidth.clamp(1.0, 8.0),
-              color: viewerState.currentColor,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '${viewerState.strokeWidth.toInt()}pt',
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-      ),
+      tooltip: 'Stroke Thickness',
+      offset: const Offset(0, 40),
+      icon: const Icon(Icons.line_weight_rounded, size: 18),
       onSelected: (w) => controller.setStrokeWidth(w),
       itemBuilder: (context) {
+        final widths = [1.5, 3.0, 5.0, 8.0, 12.0];
         return widths.map((w) {
-          return PopupMenuItem(
+          return PopupMenuItem<double>(
             value: w,
             child: Row(
               children: [
                 Container(
-                  width: 30,
+                  width: 40,
                   height: w,
-                  color: viewerState.currentColor,
+                  decoration: BoxDecoration(
+                    color: viewerState.activeColor,
+                    borderRadius: BorderRadius.circular(w / 2),
+                  ),
                 ),
                 const SizedBox(width: 12),
-                Text('${w.toInt()} pt', style: const TextStyle(fontSize: 12)),
+                Text('${w.toInt()} px', style: const TextStyle(fontSize: 12)),
               ],
             ),
           );
@@ -345,24 +483,16 @@ class MarkupToolbar extends StatelessWidget {
 
   Widget _buildOpacityButton(BuildContext context) {
     return PopupMenuButton<double>(
-      tooltip: 'Opacity',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: AppColors.darkBorder),
-        ),
-        child: Text(
-          '${(viewerState.opacity * 100).toInt()}%',
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-        ),
-      ),
-      onSelected: (o) => controller.setOpacity(o),
+      tooltip: 'Markup Opacity',
+      offset: const Offset(0, 40),
+      icon: const Icon(Icons.opacity_rounded, size: 18),
+      onSelected: (op) => controller.setOpacity(op),
       itemBuilder: (context) {
-        return [0.25, 0.50, 0.75, 1.0].map((o) {
-          return PopupMenuItem(
-            value: o,
-            child: Text('${(o * 100).toInt()}% Opacity', style: const TextStyle(fontSize: 12)),
+        final opacities = [1.0, 0.75, 0.5, 0.25];
+        return opacities.map((op) {
+          return PopupMenuItem<double>(
+            value: op,
+            child: Text('${(op * 100).toInt()}%', style: const TextStyle(fontSize: 13)),
           );
         }).toList();
       },
@@ -371,21 +501,9 @@ class MarkupToolbar extends StatelessWidget {
 
   Widget _buildVerticalDivider(bool isDark) {
     return Container(
-      width: 1,
       height: 24,
+      width: 1,
       color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
     );
-  }
-
-  String _getColorName(Color c) {
-    if (c == const Color(0xFFD32F2F)) return 'Safety Red';
-    if (c == const Color(0xFF2E7D32)) return 'Field Green';
-    if (c == const Color(0xFF1565C0)) return 'P&ID Blue';
-    if (c == const Color(0xFFFBC02D)) return 'Warning Yellow';
-    if (c == const Color(0xFF7B1FA2)) return 'Instrument Purple';
-    if (c == const Color(0xFF212121)) return 'Carbon Black';
-    if (c == const Color(0xFFFF6F00)) return 'Hazard Orange';
-    if (c == const Color(0xFF00838F)) return 'Process Cyan';
-    return 'Custom Color';
   }
 }

@@ -10,6 +10,7 @@ import '../../features/drawings/presentation/screens/drawing_details_screen.dart
 import '../../features/offline_manager/presentation/screens/offline_download_manager_screen.dart';
 import '../../features/offline_manager/presentation/screens/offline_data_screen.dart';
 import '../../features/calculations/presentation/screens/calculations_screen.dart';
+import '../../features/takeoff/presentation/screens/takeoff_screen.dart';
 import '../../features/reports/presentation/screens/reports_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../shared/widgets/tablet_scaffold.dart';
@@ -97,6 +98,12 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: '/calculations',
           builder: (context, state) => const CalculationsScreen(),
+        ),
+
+        // Material Takeoff & Bill of Materials (MTO / BOM)
+        GoRoute(
+          path: '/takeoff',
+          builder: (context, state) => const TakeoffScreen(),
         ),
 
         // Field Reports Generator

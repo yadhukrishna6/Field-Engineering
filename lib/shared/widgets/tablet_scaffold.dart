@@ -29,8 +29,9 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
     if (path.startsWith('/offline-downloads')) return 3;
     if (path.startsWith('/offline-data')) return 4;
     if (path.startsWith('/calculations')) return 5;
-    if (path.startsWith('/reports')) return 6;
-    if (path.startsWith('/settings')) return 7;
+    if (path.startsWith('/takeoff')) return 6;
+    if (path.startsWith('/reports')) return 7;
+    if (path.startsWith('/settings')) return 8;
     return 0;
   }
 
@@ -55,9 +56,12 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
         context.go('/calculations');
         break;
       case 6:
-        context.go('/reports');
+        context.go('/takeoff');
         break;
       case 7:
+        context.go('/reports');
+        break;
+      case 8:
         context.go('/settings');
         break;
     }
@@ -184,15 +188,21 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
                         label: 'Offline Data & Cache',
                       ),
                       const SizedBox(height: 12),
-                      _buildSectionHeader('FIELD TOOLS (PHASE 2)'),
+                      _buildSectionHeader('ENGINEERING & FIELD TOOLS (PHASE 3)'),
                       _buildNavItem(
                         index: 5,
                         selectedIndex: selectedIndex,
                         icon: Icons.calculate_rounded,
-                        label: 'Calculations',
+                        label: 'Calculators',
                       ),
                       _buildNavItem(
                         index: 6,
+                        selectedIndex: selectedIndex,
+                        icon: Icons.table_chart_rounded,
+                        label: 'Material Takeoff (MTO)',
+                      ),
+                      _buildNavItem(
+                        index: 7,
                         selectedIndex: selectedIndex,
                         icon: Icons.description_rounded,
                         label: 'Reports & Export',
@@ -200,7 +210,7 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
                       const SizedBox(height: 12),
                       _buildSectionHeader('SYSTEM'),
                       _buildNavItem(
-                        index: 7,
+                        index: 8,
                         selectedIndex: selectedIndex,
                         icon: Icons.settings_rounded,
                         label: 'Settings',

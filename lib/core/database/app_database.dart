@@ -43,7 +43,7 @@ class AppDatabase {
 
       return await openDatabase(
         dbPath,
-        version: 1,
+        version: 2,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
       );
@@ -126,18 +126,97 @@ class AppDatabase {
       )
     ''');
 
+    // Calibrations Table (Phase 3)
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.calibrations} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colDrawingId} TEXT NOT NULL,
+        ${DatabaseTables.colPageNumber} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colPoint1X} REAL NOT NULL,
+        ${DatabaseTables.colPoint1Y} REAL NOT NULL,
+        ${DatabaseTables.colPoint2X} REAL NOT NULL,
+        ${DatabaseTables.colPoint2Y} REAL NOT NULL,
+        ${DatabaseTables.colKnownDistance} REAL NOT NULL,
+        ${DatabaseTables.colScaleUnit} TEXT NOT NULL,
+        ${DatabaseTables.colScaleFactor} REAL NOT NULL,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
+        ${DatabaseTables.colUpdatedAt} TEXT NOT NULL,
+        FOREIGN KEY (${DatabaseTables.colDrawingId}) REFERENCES ${DatabaseTables.drawings}(${DatabaseTables.colId}) ON DELETE CASCADE
+      )
+    ''');
+
+    // Measurements Table (Phase 3)
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.measurements} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colDrawingId} TEXT NOT NULL,
+        ${DatabaseTables.colPageNumber} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colMeasurementType} TEXT NOT NULL,
+        ${DatabaseTables.colPointsData} TEXT NOT NULL,
+        ${DatabaseTables.colCalculatedValue} REAL NOT NULL,
+        ${DatabaseTables.colUnit} TEXT NOT NULL,
+        ${DatabaseTables.colCalibrationId} TEXT,
+        ${DatabaseTables.colLabel} TEXT,
+        ${DatabaseTables.colColor} INTEGER,
+        ${DatabaseTables.colMetadata} TEXT,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
+        FOREIGN KEY (${DatabaseTables.colDrawingId}) REFERENCES ${DatabaseTables.drawings}(${DatabaseTables.colId}) ON DELETE CASCADE
+      )
+    ''');
+
+    // Material Takeoff (MTO / BOM) Table (Phase 3)
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.takeoffItems} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colProjectId} TEXT NOT NULL,
+        ${DatabaseTables.colDrawingId} TEXT,
+        ${DatabaseTables.colPageNumber} INTEGER DEFAULT 1,
+        ${DatabaseTables.colItemType} TEXT NOT NULL,
+        ${DatabaseTables.colItemName} TEXT NOT NULL,
+        ${DatabaseTables.colSpecification} TEXT,
+        ${DatabaseTables.colSize} TEXT,
+        ${DatabaseTables.colQuantity} REAL NOT NULL DEFAULT 1.0,
+        ${DatabaseTables.colUnit} TEXT NOT NULL DEFAULT 'pcs',
+        ${DatabaseTables.colUnitWeight} REAL DEFAULT 0.0,
+        ${DatabaseTables.colUnitCost} REAL DEFAULT 0.0,
+        ${DatabaseTables.colNotes} TEXT,
+        ${DatabaseTables.colLinkedCountTag} TEXT,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
+        ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    // Saved Calculations Table (Phase 3)
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.savedCalculations} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colProjectId} TEXT,
+        ${DatabaseTables.colDrawingId} TEXT,
+        ${DatabaseTables.colCalcType} TEXT NOT NULL,
+        ${DatabaseTables.colTitle} TEXT NOT NULL,
+        ${DatabaseTables.colInputsJson} TEXT NOT NULL,
+        ${DatabaseTables.colResultsJson} TEXT NOT NULL,
+        ${DatabaseTables.colEngineerNotes} TEXT,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL
+      )
+    ''');
+
     // Indexes for fast tablet search and filters
     batch.execute('CREATE INDEX IF NOT EXISTS idx_drawings_project_id ON ${DatabaseTables.drawings}(${DatabaseTables.colProjectId});');
     batch.execute('CREATE INDEX IF NOT EXISTS idx_drawings_type ON ${DatabaseTables.drawings}(${DatabaseTables.colDrawingType});');
     batch.execute('CREATE INDEX IF NOT EXISTS idx_projects_status ON ${DatabaseTables.projects}(${DatabaseTables.colStatus});');
     batch.execute('CREATE INDEX IF NOT EXISTS idx_markups_drawing_page ON ${DatabaseTables.markups}(${DatabaseTables.colDrawingId}, ${DatabaseTables.colPageNumber});');
     batch.execute('CREATE INDEX IF NOT EXISTS idx_markups_layer ON ${DatabaseTables.markups}(${DatabaseTables.colLayer});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_calibrations_dwg_page ON ${DatabaseTables.calibrations}(${DatabaseTables.colDrawingId}, ${DatabaseTables.colPageNumber});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_measurements_dwg_page ON ${DatabaseTables.measurements}(${DatabaseTables.colDrawingId}, ${DatabaseTables.colPageNumber});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_takeoff_project ON ${DatabaseTables.takeoffItems}(${DatabaseTables.colProjectId});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_takeoff_drawing ON ${DatabaseTables.takeoffItems}(${DatabaseTables.colDrawingId});');
 
     await batch.commit(noResult: true);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Ensure markups table exists on upgraded local database
+    // Create any missing tables on upgrade
     await db.execute('''
       CREATE TABLE IF NOT EXISTS ${DatabaseTables.markups} (
         ${DatabaseTables.colId} TEXT PRIMARY KEY,
@@ -157,7 +236,71 @@ class AppDatabase {
         ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
       )
     ''');
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_markups_drawing_page ON ${DatabaseTables.markups}(${DatabaseTables.colDrawingId}, ${DatabaseTables.colPageNumber});');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.calibrations} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colDrawingId} TEXT NOT NULL,
+        ${DatabaseTables.colPageNumber} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colPoint1X} REAL NOT NULL,
+        ${DatabaseTables.colPoint1Y} REAL NOT NULL,
+        ${DatabaseTables.colPoint2X} REAL NOT NULL,
+        ${DatabaseTables.colPoint2Y} REAL NOT NULL,
+        ${DatabaseTables.colKnownDistance} REAL NOT NULL,
+        ${DatabaseTables.colScaleUnit} TEXT NOT NULL,
+        ${DatabaseTables.colScaleFactor} REAL NOT NULL,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
+        ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.measurements} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colDrawingId} TEXT NOT NULL,
+        ${DatabaseTables.colPageNumber} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colMeasurementType} TEXT NOT NULL,
+        ${DatabaseTables.colPointsData} TEXT NOT NULL,
+        ${DatabaseTables.colCalculatedValue} REAL NOT NULL,
+        ${DatabaseTables.colUnit} TEXT NOT NULL,
+        ${DatabaseTables.colCalibrationId} TEXT,
+        ${DatabaseTables.colLabel} TEXT,
+        ${DatabaseTables.colColor} INTEGER,
+        ${DatabaseTables.colMetadata} TEXT,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.takeoffItems} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colProjectId} TEXT NOT NULL,
+        ${DatabaseTables.colDrawingId} TEXT,
+        ${DatabaseTables.colPageNumber} INTEGER DEFAULT 1,
+        ${DatabaseTables.colItemType} TEXT NOT NULL,
+        ${DatabaseTables.colItemName} TEXT NOT NULL,
+        ${DatabaseTables.colSpecification} TEXT,
+        ${DatabaseTables.colSize} TEXT,
+        ${DatabaseTables.colQuantity} REAL NOT NULL DEFAULT 1.0,
+        ${DatabaseTables.colUnit} TEXT NOT NULL DEFAULT 'pcs',
+        ${DatabaseTables.colUnitWeight} REAL DEFAULT 0.0,
+        ${DatabaseTables.colUnitCost} REAL DEFAULT 0.0,
+        ${DatabaseTables.colNotes} TEXT,
+        ${DatabaseTables.colLinkedCountTag} TEXT,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
+        ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.savedCalculations} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colProjectId} TEXT,
+        ${DatabaseTables.colDrawingId} TEXT,
+        ${DatabaseTables.colCalcType} TEXT NOT NULL,
+        ${DatabaseTables.colTitle} TEXT NOT NULL,
+        ${DatabaseTables.colInputsJson} TEXT NOT NULL,
+        ${DatabaseTables.colResultsJson} TEXT NOT NULL,
+        ${DatabaseTables.colEngineerNotes} TEXT,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL
+      )
+    ''');
   }
 
   Future<int> getDatabaseSizeInBytes() async {

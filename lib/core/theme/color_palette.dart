@@ -52,3 +52,23 @@ class AppColors {
   static const Color drawingPiping = Color(0xFF4338CA); // Piping General (Indigo)
   static const Color drawingGeneral = Color(0xFF0D9488); // General Arrangement (Teal)
 }
+
+class DrawingColorItem {
+  final String name;
+  final Color color;
+  const DrawingColorItem(this.name, this.color);
+}
+
+class DrawingColorPalette {
+  static const List<DrawingColorItem> engineeringPalette = [
+    DrawingColorItem('Safety Red', Color(0xFFD32F2F)),
+    DrawingColorItem('Field Green', Color(0xFF2E7D32)),
+    DrawingColorItem('Process Blue', Color(0xFF1565C0)),
+    DrawingColorItem('Dimension Cyan', Color(0xFF0288D1)),
+    DrawingColorItem('Warning Yellow', Color(0xFFFBC02D)),
+    DrawingColorItem('Instrument Purple', Color(0xFF7B1FA2)),
+    DrawingColorItem('Hazard Orange', Color(0xFFFF6F00)),
+    DrawingColorItem('Carbon Black', Color(0xFF212121)),
+    DrawingColorItem('Pure White', Color(0xFFFFFFFF)),
+  ];
+}

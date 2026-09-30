@@ -5,12 +5,15 @@ import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 import '../../domain/models/drawing_type.dart';
 import '../../domain/models/markup.dart';
+import '../../domain/models/drawing_calibration.dart';
 import '../controllers/drawings_controller.dart';
 import '../controllers/markup_controller.dart';
 import '../widgets/drawing_canvas_view.dart';
 import '../widgets/markup_toolbar.dart';
 import '../widgets/layer_management_panel.dart';
 import '../widgets/thumbnail_navigation_drawer.dart';
+import '../widgets/calibration_dialog.dart';
+import '../widgets/count_tool_dialog.dart';
 import '../../../../core/theme/color_palette.dart';
 import '../../../../core/storage/storage_models.dart';
 import '../../../../shared/widgets/loading_state_view.dart';
@@ -308,6 +311,28 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
     );
   }
 
+  void _handleCalibration(MarkupController controller, DrawingViewerState viewerState) {
+    if (viewerState.isCalibrating) {
+      if (viewerState.calibrationPoints.length >= 2) {
+        CalibrationDialog.show(context, controller: controller, viewerState: viewerState);
+      } else {
+        controller.cancelCalibration();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Scale calibration cancelled')),
+        );
+      }
+    } else {
+      controller.startCalibration();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tap 2 reference points on the drawing with a known dimension'),
+          backgroundColor: AppColors.safetyOrange,
+          duration: Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final drawingAsync = ref.watch(singleDrawingProvider(widget.drawingId));
@@ -591,6 +616,34 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                           ),
                           const SizedBox(height: 14),
                           _buildInspectorCard(
+                            title: 'SCALE & CALIBRATION',
+                            children: [
+                              _buildDetailRow(
+                                'Status',
+                                viewerState.calibration != null ? 'Calibrated ✓' : 'Uncalibrated',
+                              ),
+                              if (viewerState.calibration != null) ...[
+                                _buildDetailRow(
+                                  'Known Dimension',
+                                  '${viewerState.calibration!.knownDistance} ${viewerState.calibration!.unit.symbol}',
+                                ),
+                                _buildDetailRow(
+                                  'Scale Unit',
+                                  viewerState.calibration!.unit.displayName,
+                                ),
+                              ],
+                              _buildDetailRow(
+                                'Measurements on Sheet',
+                                '${viewerState.measurements.where((m) => m.type.name != 'count').length}',
+                              ),
+                              _buildDetailRow(
+                                'Count Pins on Sheet',
+                                '${viewerState.measurements.where((m) => m.type.name == 'count').length}',
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          _buildInspectorCard(
                             title: 'MARKUP LAYER STATISTICS',
                             children: [
                               _buildDetailRow('Total Markups on Sheet', '${viewerState.activePageMarkups.length} items'),
@@ -611,22 +664,89 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                 top: 16,
                 left: 20,
                 right: 20,
-                child: Center(
-                  child: MarkupToolbar(
-                    viewerState: viewerState,
-                    controller: markupController,
-                    onToggleLayers: () {
-                      setState(() {
-                        _showLayerPanel = !_showLayerPanel;
-                        _showThumbnailDrawer = false;
-                      });
-                    },
-                    onFitToScreen: _fitToScreen,
-                    onAddText: () => _showAddTextDialog(markupController),
-                    onAddIssue: () => _showAddIssueDialog(markupController),
-                    onAddPhoto: () => _showAddPhotoDialog(markupController),
-                    onAddStamp: () => _showAddStampDialog(markupController),
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    MarkupToolbar(
+                      viewerState: viewerState,
+                      controller: markupController,
+                      onToggleLayers: () {
+                        setState(() {
+                          _showLayerPanel = !_showLayerPanel;
+                          _showThumbnailDrawer = false;
+                        });
+                      },
+                      onFitToScreen: _fitToScreen,
+                      onAddText: () => _showAddTextDialog(markupController),
+                      onAddIssue: () => _showAddIssueDialog(markupController),
+                      onAddPhoto: () => _showAddPhotoDialog(markupController),
+                      onAddStamp: () => _showAddStampDialog(markupController),
+                      onCalibrate: () => _handleCalibration(markupController, viewerState),
+                      onOpenCountTool: () => CountToolDialog.show(
+                        context,
+                        controller: markupController,
+                        viewerState: viewerState,
+                      ),
+                    ),
+                    if (viewerState.isCalibrating) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.safetyOrange,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.straighten_rounded, color: Colors.white, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              viewerState.calibrationPoints.length < 2
+                                  ? 'Calibration: Tap Point ${viewerState.calibrationPoints.length + 1} of 2 on Drawing'
+                                  : '2 Points Selected! Enter dimension to finish.',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            if (viewerState.calibrationPoints.length >= 2)
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: AppColors.safetyOrange,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                onPressed: () => CalibrationDialog.show(
+                                  context,
+                                  controller: markupController,
+                                  viewerState: viewerState,
+                                ),
+                                child: const Text('Set Distance', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              ),
+                            const SizedBox(width: 6),
+                            IconButton(
+                              icon: const Icon(Icons.close, color: Colors.white, size: 18),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: markupController.cancelCalibration,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
 

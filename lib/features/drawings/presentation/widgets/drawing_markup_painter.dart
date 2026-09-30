@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../domain/models/markup.dart';
+import '../../domain/models/measurement.dart';
+import '../../domain/utils/measurement_calculator.dart';
 import '../controllers/markup_controller.dart';
 
 class DrawingMarkupPainter extends CustomPainter {
@@ -16,6 +18,7 @@ class DrawingMarkupPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final visibleLayers = viewerState.visibleLayers;
     final activeMarkups = viewerState.activePageMarkups;
+    final activeMeasurements = viewerState.activePageMeasurements;
 
     // 1. Render all persistent markups on active page matching visible layers
     for (final markup in activeMarkups) {
@@ -24,14 +27,34 @@ class DrawingMarkupPainter extends CustomPainter {
       _drawMarkup(canvas, size, markup, isSelected);
     }
 
-    // 2. Render currently active in-progress drawing stroke/shape
+    // 2. Render all persistent measurements (Phase 3 Measurement Layer)
+    if (visibleLayers.contains(DrawingLayer.measurement)) {
+      for (final measurement in activeMeasurements) {
+        final isSelected = measurement.id == viewerState.selectedMeasurementId;
+        _drawMeasurement(canvas, size, measurement, isSelected);
+      }
+    }
+
+    // 3. Render currently active in-progress drawing stroke/shape
     if (viewerState.isDrawingMode &&
         viewerState.selectedTool != null &&
         viewerState.inProgressPoints.isNotEmpty) {
       _drawInProgressMarkup(canvas, size);
     }
 
-    // 3. Render selection transform handles
+    // 4. Render currently active in-progress measurement
+    if (viewerState.isDrawingMode &&
+        viewerState.selectedMeasurementTool != null &&
+        viewerState.inProgressPoints.isNotEmpty) {
+      _drawInProgressMeasurement(canvas, size);
+    }
+
+    // 5. Render Calibration Guide & Target Crosshairs (Phase 3)
+    if (viewerState.isCalibrating) {
+      _drawCalibrationGuide(canvas, size);
+    }
+
+    // 6. Render selection transform handles
     if (viewerState.selectedMarkupId != null) {
       final selected = activeMarkups.where((m) => m.id == viewerState.selectedMarkupId).firstOrNull;
       if (selected != null) {
@@ -39,6 +62,8 @@ class DrawingMarkupPainter extends CustomPainter {
       }
     }
   }
+
+  // --- Markups Rendering ---
 
   void _drawMarkup(Canvas canvas, Size size, Markup markup, bool isSelected) {
     final paint = Paint()
@@ -125,7 +150,11 @@ class DrawingMarkupPainter extends CustomPainter {
         _drawTextCallout(canvas, size, markup);
         break;
       case MarkupType.measurement:
-        _drawMeasurementRuler(canvas, size, markup, paint);
+        if (markup.points.length >= 2) {
+          final p1 = markup.points.first.toOffset(size);
+          final p2 = markup.points.last.toOffset(size);
+          _drawDimensionLine(canvas, p1, p2, paint, text: markup.text);
+        }
         break;
       case MarkupType.issuePin:
         _drawIssuePin(canvas, size, markup);
@@ -140,6 +169,386 @@ class DrawingMarkupPainter extends CustomPainter {
         break;
     }
   }
+
+  // --- Phase 3: Measurements Rendering ---
+
+  void _drawMeasurement(Canvas canvas, Size size, Measurement measurement, bool isSelected) {
+    final baseColor = isSelected ? Colors.amberAccent : measurement.color;
+    final paint = Paint()
+      ..color = baseColor
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final displayLabel = measurement.formattedDisplay;
+
+    switch (measurement.type) {
+      case MeasurementType.distance:
+        if (measurement.points.length >= 2) {
+          final p1 = measurement.points[0].toOffset(size);
+          final p2 = measurement.points[1].toOffset(size);
+          _drawDimensionLine(canvas, p1, p2, paint, text: displayLabel);
+        }
+        break;
+
+      case MeasurementType.polylineDistance:
+        if (measurement.points.length >= 2) {
+          final screenPts = measurement.points.map((p) => p.toOffset(size)).toList();
+          _drawPolylineWithTicks(canvas, screenPts, paint, text: displayLabel);
+        }
+        break;
+
+      case MeasurementType.area:
+        if (measurement.points.length >= 3) {
+          final screenPts = measurement.points.map((p) => p.toOffset(size)).toList();
+          _drawAreaPolygon(canvas, screenPts, paint, text: displayLabel);
+        }
+        break;
+
+      case MeasurementType.angle:
+        if (measurement.points.length >= 3) {
+          final p0 = measurement.points[0].toOffset(size);
+          final p1 = measurement.points[1].toOffset(size);
+          final p2 = measurement.points[2].toOffset(size);
+          _drawAngleArc(canvas, p0, p1, p2, paint, text: displayLabel);
+        }
+        break;
+
+      case MeasurementType.radius:
+        if (measurement.points.length >= 2) {
+          final p0 = measurement.points[0].toOffset(size);
+          final p1 = measurement.points[1].toOffset(size);
+          _drawRadiusMeasurement(canvas, p0, p1, paint, text: displayLabel);
+        }
+        break;
+
+      case MeasurementType.diameter:
+        if (measurement.points.length >= 2) {
+          final p0 = measurement.points[0].toOffset(size);
+          final p1 = measurement.points[1].toOffset(size);
+          _drawDiameterMeasurement(canvas, p0, p1, paint, text: displayLabel);
+        }
+        break;
+
+      case MeasurementType.count:
+        if (measurement.points.isNotEmpty) {
+          final pos = measurement.points[0].toOffset(size);
+          final number = measurement.calculatedValue.toInt();
+          final name = measurement.metadata?['componentName'] ?? 'Item';
+          _drawCountMarker(canvas, pos, number, name, baseColor);
+        }
+        break;
+
+      case MeasurementType.perimeter:
+        if (measurement.points.length >= 2) {
+          final screenPts = measurement.points.map((p) => p.toOffset(size)).toList();
+          _drawPerimeterLoop(canvas, screenPts, paint, text: displayLabel);
+        }
+        break;
+    }
+  }
+
+  void _drawInProgressMeasurement(Canvas canvas, Size size) {
+    final mTool = viewerState.selectedMeasurementTool!;
+    final points = viewerState.inProgressPoints;
+    if (points.isEmpty) return;
+
+    final paint = Paint()
+      ..color = viewerState.currentColor
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final screenPts = points.map((p) => p.toOffset(size)).toList();
+    final cal = viewerState.effectiveCalibration;
+    final calcVal = MeasurementCalculator.calculateValue(type: mTool, points: points, calibration: cal);
+    final unitSym = MeasurementCalculator.getUnitSymbol(mTool, cal);
+
+    final previewLabel = '$calcVal $unitSym';
+
+    switch (mTool) {
+      case MeasurementType.distance:
+      case MeasurementType.radius:
+      case MeasurementType.diameter:
+        if (screenPts.length >= 2) {
+          _drawDimensionLine(canvas, screenPts[0], screenPts[1], paint, text: previewLabel);
+        }
+        break;
+      case MeasurementType.polylineDistance:
+      case MeasurementType.perimeter:
+        if (screenPts.length >= 2) {
+          _drawPolylineWithTicks(canvas, screenPts, paint, text: previewLabel);
+        }
+        break;
+      case MeasurementType.area:
+        if (screenPts.length >= 3) {
+          _drawAreaPolygon(canvas, screenPts, paint, text: previewLabel);
+        } else if (screenPts.length == 2) {
+          canvas.drawLine(screenPts[0], screenPts[1], paint);
+        }
+        break;
+      case MeasurementType.angle:
+        if (screenPts.length >= 3) {
+          _drawAngleArc(canvas, screenPts[0], screenPts[1], screenPts[2], paint, text: previewLabel);
+        } else if (screenPts.length == 2) {
+          canvas.drawLine(screenPts[0], screenPts[1], paint);
+        }
+        break;
+      case MeasurementType.count:
+        break;
+    }
+  }
+
+  // --- Dimension & Geometry Drawing Primitives ---
+
+  void _drawDimensionLine(Canvas canvas, Offset p1, Offset p2, Paint paint, {String? text}) {
+    // Dimension line
+    canvas.drawLine(p1, p2, paint);
+
+    // Perpendicular witness ticks
+    final angle = math.atan2(p2.dy - p1.dy, p2.dx - p1.dx);
+    const tickLen = 8.0;
+    final normal = Offset(-math.sin(angle), math.cos(angle)) * tickLen;
+
+    canvas.drawLine(p1 - normal, p1 + normal, paint);
+    canvas.drawLine(p2 - normal, p2 + normal, paint);
+
+    // Dimension Label Pill
+    if (text != null && text.isNotEmpty) {
+      final mid = Offset((p1.dx + p2.dx) / 2, (p1.dy + p2.dy) / 2);
+      _drawLabelPill(canvas, mid, text, paint.color);
+    }
+  }
+
+  void _drawPolylineWithTicks(Canvas canvas, List<Offset> points, Paint paint, {String? text}) {
+    if (points.length < 2) return;
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+
+    for (int i = 1; i < points.length; i++) {
+      path.lineTo(points[i].dx, points[i].dy);
+      // Vertex node circle
+      canvas.drawCircle(points[i], 3.0, Paint()..color = paint.color..style = PaintingStyle.fill);
+    }
+    canvas.drawPath(path, paint);
+
+    if (text != null && text.isNotEmpty) {
+      final mid = points[points.length ~/ 2];
+      _drawLabelPill(canvas, mid, 'POLY: $text', paint.color);
+    }
+  }
+
+  void _drawAreaPolygon(Canvas canvas, List<Offset> points, Paint paint, {String? text}) {
+    if (points.length < 3) return;
+
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    double sumX = 0, sumY = 0;
+
+    for (final p in points) {
+      path.lineTo(p.dx, p.dy);
+      sumX += p.dx;
+      sumY += p.dy;
+    }
+    path.close();
+
+    // Fill with semi-transparent tint
+    final fillPaint = Paint()
+      ..color = paint.color.withOpacity(0.18)
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, fillPaint);
+    canvas.drawPath(path, paint);
+
+    // Centroid for Area Label Pill
+    if (text != null && text.isNotEmpty) {
+      final centroid = Offset(sumX / points.length, sumY / points.length);
+      _drawLabelPill(canvas, centroid, 'AREA: $text', paint.color);
+    }
+  }
+
+  void _drawPerimeterLoop(Canvas canvas, List<Offset> points, Paint paint, {String? text}) {
+    if (points.length < 2) return;
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (int i = 1; i < points.length; i++) {
+      path.lineTo(points[i].dx, points[i].dy);
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+
+    if (text != null && text.isNotEmpty) {
+      final mid = points[0];
+      _drawLabelPill(canvas, mid, 'PERI: $text', paint.color);
+    }
+  }
+
+  void _drawAngleArc(Canvas canvas, Offset p0, Offset p1, Offset p2, Paint paint, {String? text}) {
+    // Draw the two rays from vertex P1
+    canvas.drawLine(p1, p0, paint);
+    canvas.drawLine(p1, p2, paint);
+
+    final angle1 = math.atan2(p0.dy - p1.dy, p0.dx - p1.dx);
+    final angle2 = math.atan2(p2.dy - p1.dy, p2.dx - p1.dx);
+    var sweep = angle2 - angle1;
+
+    while (sweep < -math.pi) sweep += 2 * math.pi;
+    while (sweep > math.pi) sweep -= 2 * math.pi;
+
+    const arcRadius = 28.0;
+    final rect = Rect.fromCircle(center: p1, radius: arcRadius);
+    canvas.drawArc(rect, angle1, sweep, false, paint);
+
+    // Draw vertex point
+    canvas.drawCircle(p1, 4.0, Paint()..color = paint.color..style = PaintingStyle.fill);
+
+    if (text != null && text.isNotEmpty) {
+      final midAngle = angle1 + sweep / 2;
+      final labelPos = p1 + Offset(math.cos(midAngle), math.sin(midAngle)) * (arcRadius + 16.0);
+      _drawLabelPill(canvas, labelPos, text, paint.color);
+    }
+  }
+
+  void _drawRadiusMeasurement(Canvas canvas, Offset center, Offset edge, Paint paint, {String? text}) {
+    _drawArrowLine(canvas, center, edge, paint);
+    canvas.drawCircle(center, 3.5, Paint()..color = paint.color..style = PaintingStyle.fill);
+
+    final dist = (edge - center).distance;
+    final dashedCircle = Paint()
+      ..color = paint.color.withOpacity(0.35)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    canvas.drawCircle(center, dist, dashedCircle);
+
+    if (text != null && text.isNotEmpty) {
+      final mid = Offset((center.dx + edge.dx) / 2, (center.dy + edge.dy) / 2);
+      _drawLabelPill(canvas, mid, text, paint.color);
+    }
+  }
+
+  void _drawDiameterMeasurement(Canvas canvas, Offset p1, Offset p2, Paint paint, {String? text}) {
+    _drawDimensionLine(canvas, p1, p2, paint, text: text);
+    final mid = Offset((p1.dx + p2.dx) / 2, (p1.dy + p2.dy) / 2);
+    final radius = (p2 - p1).distance / 2;
+
+    final dashedCircle = Paint()
+      ..color = paint.color.withOpacity(0.35)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    canvas.drawCircle(mid, radius, dashedCircle);
+  }
+
+  void _drawCountMarker(Canvas canvas, Offset pos, int number, String componentName, Color color) {
+    const radius = 15.0;
+
+    // Outer glow / shadow circle
+    final glowPaint = Paint()
+      ..color = color.withOpacity(0.3)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(pos, radius + 4, glowPaint);
+
+    // Main badge
+    final bgPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawCircle(pos, radius, bgPaint);
+    canvas.drawCircle(pos, radius, borderPaint);
+
+    // Number text
+    final numSpan = TextSpan(
+      text: '$number',
+      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+    );
+    final tp = TextPainter(text: numSpan, textDirection: TextDirection.ltr)..layout();
+    tp.paint(canvas, Offset(pos.dx - tp.width / 2, pos.dy - tp.height / 2));
+
+    // Tag Pill below marker
+    final tagSpan = TextSpan(
+      text: componentName,
+      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600),
+    );
+    final tagTp = TextPainter(text: tagSpan, textDirection: TextDirection.ltr)..layout();
+    final tagBox = Rect.fromCenter(center: Offset(pos.dx, pos.dy + radius + 10), width: tagTp.width + 8, height: 16);
+    canvas.drawRRect(RRect.fromRectAndRadius(tagBox, const Radius.circular(4)), Paint()..color = Colors.black87);
+    tagTp.paint(canvas, Offset(tagBox.left + 4, tagBox.top + 2));
+  }
+
+  void _drawLabelPill(Canvas canvas, Offset center, String text, Color accentColor) {
+    final textSpan = TextSpan(
+      text: text,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 0.3,
+      ),
+    );
+
+    final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr)..layout();
+    final padding = const EdgeInsets.symmetric(horizontal: 8, vertical: 4);
+    final pillRect = Rect.fromCenter(
+      center: center,
+      width: tp.width + padding.horizontal,
+      height: tp.height + padding.vertical,
+    );
+
+    final bgPaint = Paint()
+      ..color = const Color(0xFF1E2633).withOpacity(0.92)
+      ..style = PaintingStyle.fill;
+    final borderPaint = Paint()
+      ..color = accentColor
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    final rrect = RRect.fromRectAndRadius(pillRect, const Radius.circular(6));
+    canvas.drawRRect(rrect, bgPaint);
+    canvas.drawRRect(rrect, borderPaint);
+
+    tp.paint(canvas, Offset(pillRect.left + padding.left, pillRect.top + padding.top));
+  }
+
+  // --- Calibration Guide Rendering ---
+
+  void _drawCalibrationGuide(Canvas canvas, Size size) {
+    final points = viewerState.calibrationPoints;
+
+    for (int i = 0; i < points.length; i++) {
+      final pos = points[i].toOffset(size);
+      _drawCalibrationCrosshair(canvas, pos, 'Point ${i + 1}');
+    }
+
+    if (points.length == 2) {
+      final p1 = points[0].toOffset(size);
+      final p2 = points[1].toOffset(size);
+
+      final linePaint = Paint()
+        ..color = const Color(0xFFFF9800)
+        ..strokeWidth = 2.0
+        ..style = PaintingStyle.stroke;
+
+      canvas.drawLine(p1, p2, linePaint);
+    }
+  }
+
+  void _drawCalibrationCrosshair(Canvas canvas, Offset pos, String label) {
+    const size = 18.0;
+    final crossPaint = Paint()
+      ..color = const Color(0xFFFF9800)
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawLine(Offset(pos.dx - size, pos.dy), Offset(pos.dx + size, pos.dy), crossPaint);
+    canvas.drawLine(Offset(pos.dx, pos.dy - size), Offset(pos.dx, pos.dy + size), crossPaint);
+    canvas.drawCircle(pos, 6.0, crossPaint);
+    canvas.drawCircle(pos, 2.0, Paint()..color = const Color(0xFFFF9800)..style = PaintingStyle.fill);
+
+    _drawLabelPill(canvas, Offset(pos.dx, pos.dy - 22), label, const Color(0xFFFF9800));
+  }
+
+  // --- Standard In-Progress & Markup Helpers ---
 
   void _drawInProgressMarkup(Canvas canvas, Size size) {
     final tool = viewerState.selectedTool!;
@@ -207,7 +616,7 @@ class DrawingMarkupPainter extends CustomPainter {
         if (points.length >= 2) {
           final p1 = points.first.toOffset(size);
           final p2 = points.last.toOffset(size);
-          _drawMeasurementPreview(canvas, p1, p2, paint);
+          _drawDimensionLine(canvas, p1, p2, paint);
         }
         break;
       case MarkupType.text:
@@ -246,10 +655,9 @@ class DrawingMarkupPainter extends CustomPainter {
   void _drawArrowLine(Canvas canvas, Offset p1, Offset p2, Paint paint) {
     canvas.drawLine(p1, p2, paint);
 
-    // Draw arrowhead
     final angle = math.atan2(p2.dy - p1.dy, p2.dx - p1.dx);
     const arrowLength = 16.0;
-    const arrowAngle = math.pi / 6; // 30 degrees
+    const arrowAngle = math.pi / 6;
 
     final arrowPath = Path();
     arrowPath.moveTo(p2.dx, p2.dy);
@@ -274,7 +682,6 @@ class DrawingMarkupPainter extends CustomPainter {
       final rect = _toScreenRect(markup.bounds!, size);
       _drawCloudRect(canvas, rect, paint);
     } else if (markup.points.length >= 2) {
-      // Trace scallops along polygon path
       final screenPoints = markup.points.map((p) => p.toOffset(size)).toList();
       _drawCloudPolygon(canvas, screenPoints, paint);
     }
@@ -285,28 +692,24 @@ class DrawingMarkupPainter extends CustomPainter {
     const double arcRadius = 14.0;
     const double step = arcRadius * 1.5;
 
-    // Top edge
     for (double x = rect.left; x < rect.right; x += step) {
       final endX = math.min(x + step, rect.right);
       final midX = (x + endX) / 2;
       path.moveTo(x, rect.top);
       path.quadraticBezierTo(midX, rect.top - arcRadius, endX, rect.top);
     }
-    // Right edge
     for (double y = rect.top; y < rect.bottom; y += step) {
       final endY = math.min(y + step, rect.bottom);
       final midY = (y + endY) / 2;
       path.moveTo(rect.right, y);
       path.quadraticBezierTo(rect.right + arcRadius, midY, rect.right, endY);
     }
-    // Bottom edge
     for (double x = rect.right; x > rect.left; x -= step) {
       final endX = math.max(x - step, rect.left);
       final midX = (x + endX) / 2;
       path.moveTo(x, rect.bottom);
       path.quadraticBezierTo(midX, rect.bottom + arcRadius, endX, rect.bottom);
     }
-    // Left edge
     for (double y = rect.bottom; y > rect.top; y -= step) {
       final endY = math.max(y - step, rect.top);
       final midY = (y + endY) / 2;
@@ -369,7 +772,6 @@ class DrawingMarkupPainter extends CustomPainter {
       textPainter.height + padding.vertical,
     );
 
-    // Background pill/box
     final bgPaint = Paint()
       ..color = (markup.fillColor ?? Colors.black).withOpacity(0.8)
       ..style = PaintingStyle.fill;
@@ -385,50 +787,10 @@ class DrawingMarkupPainter extends CustomPainter {
     textPainter.paint(canvas, Offset(pos.dx + padding.left, pos.dy + padding.top));
   }
 
-  void _drawMeasurementRuler(Canvas canvas, Size size, Markup markup, Paint paint) {
-    if (markup.points.length < 2) return;
-    final p1 = markup.points.first.toOffset(size);
-    final p2 = markup.points.last.toOffset(size);
-    _drawMeasurementPreview(canvas, p1, p2, paint, customText: markup.text);
-  }
-
-  void _drawMeasurementPreview(Canvas canvas, Offset p1, Offset p2, Paint paint, {String? customText}) {
-    // Dimension line
-    canvas.drawLine(p1, p2, paint);
-
-    // Witness marks / ticks perpendicular to line
-    final angle = math.atan2(p2.dy - p1.dy, p2.dx - p1.dx);
-    const tickLen = 8.0;
-    final normal = Offset(-math.sin(angle), math.cos(angle)) * tickLen;
-
-    canvas.drawLine(p1 - normal, p1 + normal, paint);
-    canvas.drawLine(p2 - normal, p2 + normal, paint);
-
-    // Distance calculation (e.g. in mm based on 1:50 scale)
-    final distancePx = (p2 - p1).distance;
-    final distanceMm = (distancePx * 5.0).round();
-    final label = customText ?? '$distanceMm mm';
-
-    final textSpan = TextSpan(
-      text: label,
-      style: TextStyle(
-        color: paint.color,
-        fontSize: 12,
-        fontWeight: FontWeight.bold,
-        backgroundColor: Colors.black.withOpacity(0.7),
-      ),
-    );
-
-    final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr)..layout();
-    final mid = Offset((p1.dx + p2.dx) / 2, (p1.dy + p2.dy) / 2);
-    tp.paint(canvas, Offset(mid.dx - tp.width / 2, mid.dy - tp.height / 2 - 12));
-  }
-
   void _drawIssuePin(Canvas canvas, Size size, Markup markup) {
     final pos = markup.points.isNotEmpty ? markup.points.first.toOffset(size) : Offset.zero;
     const radius = 14.0;
 
-    // Pin circle
     final pinPaint = Paint()
       ..color = Colors.redAccent
       ..style = PaintingStyle.fill;
@@ -440,7 +802,6 @@ class DrawingMarkupPainter extends CustomPainter {
     canvas.drawCircle(pos, radius, pinPaint);
     canvas.drawCircle(pos, radius, borderPaint);
 
-    // Pin Tag Text
     final textSpan = TextSpan(
       text: markup.text ?? '!',
       style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
@@ -527,7 +888,6 @@ class DrawingMarkupPainter extends CustomPainter {
 
     canvas.drawRect(screenBounds, selectPaint);
 
-    // Draw 4 corner handles
     final handlePaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.fill;
@@ -561,6 +921,6 @@ class DrawingMarkupPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant DrawingMarkupPainter oldDelegate) {
-    return true; // Fast redraw on pan, zoom or stroke movement
+    return true;
   }
 }

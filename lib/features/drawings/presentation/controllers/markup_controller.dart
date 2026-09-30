@@ -3,7 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../domain/models/markup.dart';
+import '../../domain/models/measurement.dart';
+import '../../domain/models/drawing_calibration.dart';
+import '../../domain/utils/measurement_calculator.dart';
 import '../../domain/repositories/markups_repository.dart';
+import '../../domain/repositories/measurements_repository.dart';
 import '../../../../core/providers/core_providers.dart';
 
 const List<Color> kEngineeringColors = [
@@ -15,6 +19,7 @@ const List<Color> kEngineeringColors = [
   Color(0xFF212121), // Carbon Black
   Color(0xFFFF6F00), // Hazard Orange
   Color(0xFF00838F), // Cyan / Process Line
+  Color(0xFF0288D1), // Dimension Cyan
 ];
 
 class DrawingViewerState {
@@ -22,6 +27,7 @@ class DrawingViewerState {
   final int currentPage;
   final int totalPages;
   final MarkupType? selectedTool; // null = Pan/Navigate mode
+  final MeasurementType? selectedMeasurementTool; // Phase 3 measurement tool
   final Color currentColor;
   final Color? currentFillColor;
   final double strokeWidth;
@@ -29,7 +35,13 @@ class DrawingViewerState {
   final double fontSize;
   final Set<DrawingLayer> visibleLayers;
   final List<Markup> markups;
+  final List<Measurement> measurements; // Phase 3 measurements
+  final DrawingCalibration? calibration; // Phase 3 scale calibration
+  final bool isCalibrating;
+  final List<Point2D> calibrationPoints;
+  final String activeCountComponentName; // Phase 3 count tool tag
   final String? selectedMarkupId;
+  final String? selectedMeasurementId;
   final Set<String> selectedMarkupIds;
   final List<Point2D> inProgressPoints;
   final Rect? inProgressBounds;
@@ -41,6 +53,7 @@ class DrawingViewerState {
   final DateTime? lastSavedTime;
   final List<List<Markup>> undoStack;
   final List<List<Markup>> redoStack;
+  final List<List<Measurement>> measurementUndoStack;
   final List<Markup> clipboard;
 
   const DrawingViewerState({
@@ -48,6 +61,7 @@ class DrawingViewerState {
     this.currentPage = 1,
     this.totalPages = 1,
     this.selectedTool,
+    this.selectedMeasurementTool,
     this.currentColor = const Color(0xFFD32F2F), // Default Red
     this.currentFillColor,
     this.strokeWidth = 3.0,
@@ -59,9 +73,16 @@ class DrawingViewerState {
       DrawingLayer.measurement,
       DrawingLayer.issue,
       DrawingLayer.photo,
+      DrawingLayer.inspection,
     },
     this.markups = const [],
+    this.measurements = const [],
+    this.calibration,
+    this.isCalibrating = false,
+    this.calibrationPoints = const [],
+    this.activeCountComponentName = 'Valve',
     this.selectedMarkupId,
+    this.selectedMeasurementId,
     this.selectedMarkupIds = const {},
     this.inProgressPoints = const [],
     this.inProgressBounds,
@@ -73,6 +94,7 @@ class DrawingViewerState {
     this.lastSavedTime,
     this.undoStack = const [],
     this.redoStack = const [],
+    this.measurementUndoStack = const [],
     this.clipboard = const [],
   });
 
@@ -82,6 +104,8 @@ class DrawingViewerState {
     int? totalPages,
     MarkupType? selectedTool,
     bool clearTool = false,
+    MeasurementType? selectedMeasurementTool,
+    bool clearMeasurementTool = false,
     Color? currentColor,
     Color? currentFillColor,
     bool clearFillColor = false,
@@ -90,8 +114,16 @@ class DrawingViewerState {
     double? fontSize,
     Set<DrawingLayer>? visibleLayers,
     List<Markup>? markups,
+    List<Measurement>? measurements,
+    DrawingCalibration? calibration,
+    bool clearCalibration = false,
+    bool? isCalibrating,
+    List<Point2D>? calibrationPoints,
+    String? activeCountComponentName,
     String? selectedMarkupId,
     bool clearSelectedMarkup = false,
+    String? selectedMeasurementId,
+    bool clearSelectedMeasurement = false,
     Set<String>? selectedMarkupIds,
     List<Point2D>? inProgressPoints,
     Rect? inProgressBounds,
@@ -104,6 +136,7 @@ class DrawingViewerState {
     DateTime? lastSavedTime,
     List<List<Markup>>? undoStack,
     List<List<Markup>>? redoStack,
+    List<List<Measurement>>? measurementUndoStack,
     List<Markup>? clipboard,
   }) {
     return DrawingViewerState(
@@ -111,6 +144,7 @@ class DrawingViewerState {
       currentPage: currentPage ?? this.currentPage,
       totalPages: totalPages ?? this.totalPages,
       selectedTool: clearTool ? null : (selectedTool ?? this.selectedTool),
+      selectedMeasurementTool: clearMeasurementTool ? null : (selectedMeasurementTool ?? this.selectedMeasurementTool),
       currentColor: currentColor ?? this.currentColor,
       currentFillColor: clearFillColor ? null : (currentFillColor ?? this.currentFillColor),
       strokeWidth: strokeWidth ?? this.strokeWidth,
@@ -118,7 +152,13 @@ class DrawingViewerState {
       fontSize: fontSize ?? this.fontSize,
       visibleLayers: visibleLayers ?? this.visibleLayers,
       markups: markups ?? this.markups,
+      measurements: measurements ?? this.measurements,
+      calibration: clearCalibration ? null : (calibration ?? this.calibration),
+      isCalibrating: isCalibrating ?? this.isCalibrating,
+      calibrationPoints: calibrationPoints ?? this.calibrationPoints,
+      activeCountComponentName: activeCountComponentName ?? this.activeCountComponentName,
       selectedMarkupId: clearSelectedMarkup ? null : (selectedMarkupId ?? this.selectedMarkupId),
+      selectedMeasurementId: clearSelectedMeasurement ? null : (selectedMeasurementId ?? this.selectedMeasurementId),
       selectedMarkupIds: selectedMarkupIds ?? this.selectedMarkupIds,
       inProgressPoints: clearInProgress ? const [] : (inProgressPoints ?? this.inProgressPoints),
       inProgressBounds: clearInProgress ? null : (inProgressBounds ?? this.inProgressBounds),
@@ -130,6 +170,7 @@ class DrawingViewerState {
       lastSavedTime: lastSavedTime ?? this.lastSavedTime,
       undoStack: undoStack ?? this.undoStack,
       redoStack: redoStack ?? this.redoStack,
+      measurementUndoStack: measurementUndoStack ?? this.measurementUndoStack,
       clipboard: clipboard ?? this.clipboard,
     );
   }
@@ -137,19 +178,41 @@ class DrawingViewerState {
   List<Markup> get activePageMarkups =>
       markups.where((m) => m.pageNumber == currentPage).toList();
 
-  int getLayerCount(DrawingLayer layer) =>
-      markups.where((m) => m.layer == layer && m.pageNumber == currentPage).length;
+  List<Measurement> get activePageMeasurements =>
+      measurements.where((m) => m.pageNumber == currentPage).toList();
+
+  MeasurementType? get activeMeasurementType => selectedMeasurementTool;
+
+  Color get activeColor => currentColor;
+
+  String get activeCountLabel => activeCountComponentName;
+
+  DrawingCalibration get effectiveCalibration =>
+      calibration ?? DrawingCalibration.defaultScale(drawingId, pageNumber: currentPage);
+
+  int getLayerCount(DrawingLayer layer) {
+    if (layer == DrawingLayer.measurement) {
+      return activePageMeasurements.length;
+    }
+    return markups.where((m) => m.layer == layer && m.pageNumber == currentPage).length;
+  }
 }
 
 class MarkupController extends StateNotifier<DrawingViewerState> {
-  final MarkupsRepository _repository;
+  final MarkupsRepository _markupsRepository;
+  final MeasurementsRepository? _measurementsRepository;
   final String _drawingId;
   Timer? _autosaveTimer;
   final _uuid = const Uuid();
 
-  MarkupController(this._repository, this._drawingId, {int totalPages = 1})
-      : super(DrawingViewerState(drawingId: _drawingId, totalPages: totalPages)) {
-    loadMarkups();
+  MarkupController(
+    this._markupsRepository,
+    this._drawingId, {
+    int totalPages = 1,
+    MeasurementsRepository? measurementsRepository,
+  })  : _measurementsRepository = measurementsRepository,
+        super(DrawingViewerState(drawingId: _drawingId, totalPages: totalPages)) {
+    loadAllData();
   }
 
   @override
@@ -158,29 +221,53 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
     super.dispose();
   }
 
-  Future<void> loadMarkups() async {
+  Future<void> loadAllData() async {
     try {
-      final markups = await _repository.getMarkupsForDrawing(_drawingId);
+      final markups = await _markupsRepository.getMarkupsForDrawing(_drawingId);
+      List<Measurement> measurements = [];
+      DrawingCalibration? calibration;
+
+      if (_measurementsRepository != null) {
+        measurements = await _measurementsRepository.getMeasurementsForDrawing(_drawingId);
+        calibration = await _measurementsRepository.getCalibration(_drawingId, pageNumber: state.currentPage);
+      }
+
       state = state.copyWith(
         markups: markups,
+        measurements: measurements,
+        calibration: calibration,
         undoStack: [markups],
         redoStack: [],
+        measurementUndoStack: [measurements],
         hasUnsavedChanges: false,
         lastSavedTime: DateTime.now(),
       );
     } catch (e) {
-      debugPrint('Error loading markups: $e');
+      debugPrint('Error loading drawing data: $e');
     }
   }
 
-  void setPage(int page) {
+  Future<void> loadMarkups() => loadAllData();
+
+  void setPage(int page) async {
     if (page == state.currentPage) return;
     _scheduleAutosaveNow();
+
+    DrawingCalibration? pageCalibration;
+    if (_measurementsRepository != null) {
+      pageCalibration = await _measurementsRepository.getCalibration(_drawingId, pageNumber: page);
+    }
+
     state = state.copyWith(
       currentPage: page,
+      calibration: pageCalibration,
       selectedMarkupId: null,
+      selectedMeasurementId: null,
       clearSelectedMarkup: true,
+      clearSelectedMeasurement: true,
       clearInProgress: true,
+      isCalibrating: false,
+      calibrationPoints: const [],
     );
   }
 
@@ -188,22 +275,62 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
     state = state.copyWith(totalPages: total);
   }
 
+  // --- Tool Selection ---
+
   void selectTool(MarkupType? tool) {
     if (tool == null) {
       state = state.copyWith(
         clearTool: true,
+        clearMeasurementTool: true,
         isDrawingMode: false,
         clearSelectedMarkup: true,
+        clearSelectedMeasurement: true,
         clearInProgress: true,
       );
     } else {
       state = state.copyWith(
         selectedTool: tool,
+        clearMeasurementTool: true,
         isDrawingMode: true,
         clearSelectedMarkup: true,
+        clearSelectedMeasurement: true,
         clearInProgress: true,
       );
     }
+  }
+
+  void selectMeasurementTool(MeasurementType? tool) {
+    if (tool == null) {
+      state = state.copyWith(
+        clearMeasurementTool: true,
+        isDrawingMode: false,
+        clearInProgress: true,
+      );
+    } else {
+      state = state.copyWith(
+        selectedMeasurementTool: tool,
+        clearTool: true,
+        isDrawingMode: true,
+        clearSelectedMarkup: true,
+        clearSelectedMeasurement: true,
+        clearInProgress: true,
+      );
+    }
+  }
+
+  void selectMeasurementType(MeasurementType type) => selectMeasurementTool(type);
+
+  void startCountMode({required String label, required Color color}) {
+    state = state.copyWith(
+      selectedMeasurementTool: MeasurementType.count,
+      activeCountComponentName: label,
+      currentColor: color,
+      clearTool: true,
+      isDrawingMode: true,
+      clearSelectedMarkup: true,
+      clearSelectedMeasurement: true,
+      clearInProgress: true,
+    );
   }
 
   void toggleDrawingMode() {
@@ -212,7 +339,9 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
       isDrawingMode: newMode,
       selectedTool: newMode ? (state.selectedTool ?? MarkupType.pen) : null,
       clearTool: !newMode,
+      clearMeasurementTool: !newMode,
       clearSelectedMarkup: true,
+      clearSelectedMeasurement: true,
       clearInProgress: true,
     );
   }
@@ -263,47 +392,156 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
     state = state.copyWith(isStylusOnly: !state.isStylusOnly);
   }
 
-  // --- Drawing Interaction Hooks (Normalized Page Coordinates) ---
+  // --- Part 1: Calibration Engine ---
+
+  void startCalibration() {
+    state = state.copyWith(
+      isCalibrating: true,
+      calibrationPoints: const [],
+      clearTool: true,
+      clearMeasurementTool: true,
+      isDrawingMode: true,
+    );
+  }
+
+  void addCalibrationPoint(Point2D point) {
+    final points = List<Point2D>.from(state.calibrationPoints)..add(point);
+    state = state.copyWith(calibrationPoints: points);
+  }
+
+  Future<DrawingCalibration> applyCalibration(double knownDistance, CalibrationUnit unit) async {
+    if (state.calibrationPoints.length < 2) {
+      throw Exception('Need 2 reference points to calibrate scale.');
+    }
+
+    final p1 = state.calibrationPoints[0];
+    final p2 = state.calibrationPoints[1];
+
+    final calibration = DrawingCalibration.fromPoints(
+      id: _uuid.v4(),
+      drawingId: _drawingId,
+      pageNumber: state.currentPage,
+      point1: p1,
+      point2: p2,
+      knownDistance: knownDistance,
+      unit: unit,
+    );
+
+    if (_measurementsRepository != null) {
+      await _measurementsRepository.saveCalibration(calibration);
+    }
+
+    state = state.copyWith(
+      calibration: calibration,
+      isCalibrating: false,
+      calibrationPoints: const [],
+      isDrawingMode: false,
+    );
+
+    // Re-evaluate existing measurements on this page with the new calibration scale
+    _recalculateMeasurements(calibration);
+
+    return calibration;
+  }
+
+  void cancelCalibration() {
+    state = state.copyWith(
+      isCalibrating: false,
+      calibrationPoints: const [],
+      isDrawingMode: false,
+    );
+  }
+
+  void _recalculateMeasurements(DrawingCalibration calibration) {
+    final updatedMeasurements = state.measurements.map((m) {
+      if (m.pageNumber == state.currentPage) {
+        final newValue = MeasurementCalculator.calculateValue(
+          type: m.type,
+          points: m.points,
+          calibration: calibration,
+        );
+        final unitSymbol = MeasurementCalculator.getUnitSymbol(m.type, calibration);
+        return m.copyWith(
+          calculatedValue: newValue,
+          unit: unitSymbol,
+          calibrationId: calibration.id,
+        );
+      }
+      return m;
+    }).toList();
+
+    state = state.copyWith(measurements: updatedMeasurements, hasUnsavedChanges: true);
+    _scheduleAutosave();
+  }
+
+  // --- Part 2 & Part 5: Drawing & Measurement Interaction ---
 
   void startDrawing(Point2D point) {
-    if (!state.isDrawingMode || state.selectedTool == null) return;
+    if (state.isCalibrating) {
+      addCalibrationPoint(point);
+      return;
+    }
+
+    if (!state.isDrawingMode) return;
 
     if (state.selectedTool == MarkupType.eraser) {
       _eraseNear(point);
       return;
     }
 
-    state = state.copyWith(
-      inProgressPoints: [point],
-      inProgressBounds: Rect.fromPoints(
-        Offset(point.x, point.y),
-        Offset(point.x, point.y),
-      ),
-    );
+    if (state.selectedMeasurementTool != null) {
+      _handleMeasurementPointerDown(point);
+      return;
+    }
+
+    if (state.selectedTool != null) {
+      state = state.copyWith(
+        inProgressPoints: [point],
+        inProgressBounds: Rect.fromPoints(
+          Offset(point.x, point.y),
+          Offset(point.x, point.y),
+        ),
+      );
+    }
   }
 
   void updateDrawing(Point2D point) {
-    if (!state.isDrawingMode || state.selectedTool == null) return;
+    if (state.isCalibrating) return;
+    if (!state.isDrawingMode) return;
 
     if (state.selectedTool == MarkupType.eraser) {
       _eraseNear(point);
       return;
     }
 
-    final points = List<Point2D>.from(state.inProgressPoints)..add(point);
-    final start = points.first;
-    final bounds = Rect.fromPoints(
-      Offset(start.x, start.y),
-      Offset(point.x, point.y),
-    );
+    if (state.selectedMeasurementTool != null) {
+      _handleMeasurementPointerMove(point);
+      return;
+    }
 
-    state = state.copyWith(
-      inProgressPoints: points,
-      inProgressBounds: bounds,
-    );
+    if (state.selectedTool != null) {
+      final points = List<Point2D>.from(state.inProgressPoints)..add(point);
+      final start = points.first;
+      final bounds = Rect.fromPoints(
+        Offset(start.x, start.y),
+        Offset(point.x, point.y),
+      );
+
+      state = state.copyWith(
+        inProgressPoints: points,
+        inProgressBounds: bounds,
+      );
+    }
   }
 
   void finishDrawing({String? text, Map<String, dynamic>? metadata}) {
+    if (state.isCalibrating) return;
+
+    if (state.selectedMeasurementTool != null) {
+      _handleMeasurementPointerUp();
+      return;
+    }
+
     if (!state.isDrawingMode || state.selectedTool == null || state.inProgressPoints.isEmpty) {
       state = state.copyWith(clearInProgress: true);
       return;
@@ -358,6 +596,146 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
 
     _scheduleAutosave();
   }
+
+  // --- Measurement Pointer Handlers ---
+
+  void _handleMeasurementPointerDown(Point2D point) {
+    final mTool = state.selectedMeasurementTool!;
+
+    if (mTool == MeasurementType.count) {
+      // Direct placement of count marker
+      addCountMarker(point, state.activeCountComponentName);
+      return;
+    }
+
+    if (mTool == MeasurementType.polylineDistance || mTool == MeasurementType.area || mTool == MeasurementType.perimeter) {
+      // Multi-point tool: Append points
+      final points = List<Point2D>.from(state.inProgressPoints)..add(point);
+      state = state.copyWith(inProgressPoints: points);
+    } else {
+      // 2-point tools (distance, radius, diameter) or 3-point angle
+      state = state.copyWith(inProgressPoints: [point, point]);
+    }
+  }
+
+  void _handleMeasurementPointerMove(Point2D point) {
+    final mTool = state.selectedMeasurementTool;
+    if (mTool == null || state.inProgressPoints.isEmpty) return;
+
+    if (mTool == MeasurementType.distance || mTool == MeasurementType.radius || mTool == MeasurementType.diameter) {
+      final points = [state.inProgressPoints.first, point];
+      state = state.copyWith(inProgressPoints: points);
+    } else if (mTool == MeasurementType.angle && state.inProgressPoints.length == 2) {
+      final points = [state.inProgressPoints[0], state.inProgressPoints[1], point];
+      state = state.copyWith(inProgressPoints: points);
+    }
+  }
+
+  void _handleMeasurementPointerUp() {
+    final mTool = state.selectedMeasurementTool;
+    if (mTool == null || state.inProgressPoints.isEmpty) return;
+
+    // For continuous 2-point distance / radius / diameter: Complete on pointer up
+    if (mTool == MeasurementType.distance || mTool == MeasurementType.radius || mTool == MeasurementType.diameter) {
+      if (state.inProgressPoints.length >= 2) {
+        commitCurrentMeasurement();
+      }
+    }
+  }
+
+  void commitCurrentMeasurement({String? customLabel}) {
+    final mTool = state.selectedMeasurementTool;
+    if (mTool == null || state.inProgressPoints.length < 2) {
+      state = state.copyWith(clearInProgress: true);
+      return;
+    }
+
+    final cal = state.effectiveCalibration;
+    final calcVal = MeasurementCalculator.calculateValue(
+      type: mTool,
+      points: state.inProgressPoints,
+      calibration: cal,
+    );
+    final unitSym = MeasurementCalculator.getUnitSymbol(mTool, cal);
+
+    final measurement = Measurement(
+      id: _uuid.v4(),
+      drawingId: _drawingId,
+      pageNumber: state.currentPage,
+      type: mTool,
+      points: List<Point2D>.from(state.inProgressPoints),
+      calculatedValue: calcVal,
+      unit: unitSym,
+      calibrationId: cal.id,
+      label: customLabel,
+      color: state.currentColor,
+      createdAt: DateTime.now(),
+    );
+
+    _pushMeasurementUndoState();
+
+    final updated = List<Measurement>.from(state.measurements)..add(measurement);
+    state = state.copyWith(
+      measurements: updated,
+      clearInProgress: true,
+      hasUnsavedChanges: true,
+    );
+
+    _scheduleAutosave();
+  }
+
+  // --- Part 5: Count Tool Engine ---
+
+  void setCountComponentName(String name) {
+    state = state.copyWith(activeCountComponentName: name);
+  }
+
+  void addCountMarker(Point2D position, String componentName) {
+    final existingCountOnPage = state.activePageMeasurements
+        .where((m) => m.type == MeasurementType.count && m.metadata?['componentName'] == componentName)
+        .length;
+
+    final nextNumber = existingCountOnPage + 1;
+
+    final countMeasurement = Measurement(
+      id: _uuid.v4(),
+      drawingId: _drawingId,
+      pageNumber: state.currentPage,
+      type: MeasurementType.count,
+      points: [position],
+      calculatedValue: nextNumber.toDouble(),
+      unit: 'pcs',
+      label: '$componentName #$nextNumber',
+      color: state.currentColor,
+      metadata: {
+        'componentName': componentName,
+        'index': nextNumber,
+      },
+      createdAt: DateTime.now(),
+    );
+
+    _pushMeasurementUndoState();
+
+    final updated = List<Measurement>.from(state.measurements)..add(countMeasurement);
+    state = state.copyWith(
+      measurements: updated,
+      hasUnsavedChanges: true,
+    );
+
+    _scheduleAutosave();
+  }
+
+  void deleteMeasurement(String id) {
+    _pushMeasurementUndoState();
+    final updated = state.measurements.where((m) => m.id != id).toList();
+    if (_measurementsRepository != null) {
+      _measurementsRepository.deleteMeasurement(id);
+    }
+    state = state.copyWith(measurements: updated, hasUnsavedChanges: true);
+    _scheduleAutosave();
+  }
+
+  // --- Specialized Annotations ---
 
   void addTextCallout(Point2D position, String text, {double fontSize = 14.0}) {
     final newMarkup = Markup(
@@ -489,7 +867,7 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
     if (state.selectedMarkupId == null) return;
     _pushUndoState();
     final updated = state.markups.where((m) => m.id != state.selectedMarkupId).toList();
-    _repository.deleteMarkup(state.selectedMarkupId!);
+    _markupsRepository.deleteMarkup(state.selectedMarkupId!);
     state = state.copyWith(
       markups: updated,
       clearSelectedMarkup: true,
@@ -507,7 +885,7 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
   void pasteMarkup() {
     if (state.clipboard.isEmpty) return;
     final original = state.clipboard.first;
-    const offset = 0.02; // Shift pasted item slightly
+    const offset = 0.02;
 
     final shiftedPoints = original.points.map((p) => Point2D(p.x + offset, p.y + offset)).toList();
     final shiftedBounds = original.bounds?.shift(const Offset(offset, offset));
@@ -533,11 +911,21 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
 
   void clearCurrentPageMarkups() {
     _pushUndoState();
-    final remaining = state.markups.where((m) => m.pageNumber != state.currentPage).toList();
-    _repository.deleteMarkupsForDrawing(_drawingId, pageNumber: state.currentPage);
+    _pushMeasurementUndoState();
+
+    final remainingMarkups = state.markups.where((m) => m.pageNumber != state.currentPage).toList();
+    final remainingMeasurements = state.measurements.where((m) => m.pageNumber != state.currentPage).toList();
+
+    _markupsRepository.deleteMarkupsForDrawing(_drawingId, pageNumber: state.currentPage);
+    if (_measurementsRepository != null) {
+      _measurementsRepository.deleteMeasurementsForDrawing(_drawingId, pageNumber: state.currentPage);
+    }
+
     state = state.copyWith(
-      markups: remaining,
+      markups: remainingMarkups,
+      measurements: remainingMeasurements,
       clearSelectedMarkup: true,
+      clearSelectedMeasurement: true,
       hasUnsavedChanges: true,
     );
   }
@@ -550,24 +938,41 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
     if (undoList.length > 30) undoList.removeAt(0);
     state = state.copyWith(
       undoStack: undoList,
-      redoStack: [], // Clear redo on new action
+      redoStack: [],
     );
   }
 
-  void undo() {
-    if (state.undoStack.isEmpty) return;
-    final previousMarkups = state.undoStack.last;
-    final newUndoStack = List<List<Markup>>.from(state.undoStack)..removeLast();
-    final newRedoStack = List<List<Markup>>.from(state.redoStack)..add(List<Markup>.from(state.markups));
+  void _pushMeasurementUndoState() {
+    final currentList = List<Measurement>.from(state.measurements);
+    final undoList = List<List<Measurement>>.from(state.measurementUndoStack)..add(currentList);
+    if (undoList.length > 30) undoList.removeAt(0);
+    state = state.copyWith(measurementUndoStack: undoList);
+  }
 
-    state = state.copyWith(
-      markups: previousMarkups,
-      undoStack: newUndoStack,
-      redoStack: newRedoStack,
-      clearSelectedMarkup: true,
-      hasUnsavedChanges: true,
-    );
-    _scheduleAutosave();
+  void undo() {
+    if (state.undoStack.isNotEmpty) {
+      final previousMarkups = state.undoStack.last;
+      final newUndoStack = List<List<Markup>>.from(state.undoStack)..removeLast();
+      final newRedoStack = List<List<Markup>>.from(state.redoStack)..add(List<Markup>.from(state.markups));
+
+      state = state.copyWith(
+        markups: previousMarkups,
+        undoStack: newUndoStack,
+        redoStack: newRedoStack,
+        clearSelectedMarkup: true,
+        hasUnsavedChanges: true,
+      );
+      _scheduleAutosave();
+    } else if (state.measurementUndoStack.isNotEmpty) {
+      final prevMeasurements = state.measurementUndoStack.last;
+      final newUndoStack = List<List<Measurement>>.from(state.measurementUndoStack)..removeLast();
+      state = state.copyWith(
+        measurements: prevMeasurements,
+        measurementUndoStack: newUndoStack,
+        hasUnsavedChanges: true,
+      );
+      _scheduleAutosave();
+    }
   }
 
   void redo() {
@@ -589,7 +994,7 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
   // --- Eraser Helper ---
 
   void _eraseNear(Point2D hit) {
-    const threshold = 0.03; // In normalized page space
+    const threshold = 0.03;
     final markupsOnPage = state.activePageMarkups;
     Markup? hitMarkup;
 
@@ -611,9 +1016,21 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
     if (hitMarkup != null) {
       _pushUndoState();
       final updated = state.markups.where((m) => m.id != hitMarkup!.id).toList();
-      _repository.deleteMarkup(hitMarkup.id);
+      _markupsRepository.deleteMarkup(hitMarkup.id);
       state = state.copyWith(markups: updated, hasUnsavedChanges: true);
       _scheduleAutosave();
+      return;
+    }
+
+    // Check measurements for erasure
+    for (final meas in state.activePageMeasurements.reversed) {
+      for (final p in meas.points) {
+        final dist = (p.x - hit.x).abs() + (p.y - hit.y).abs();
+        if (dist < threshold) {
+          deleteMeasurement(meas.id);
+          return;
+        }
+      }
     }
   }
 
@@ -648,7 +1065,10 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
     state = state.copyWith(isAutosaving: true);
 
     try {
-      await _repository.saveMarkupsBatch(state.markups);
+      await _markupsRepository.saveMarkupsBatch(state.markups);
+      if (_measurementsRepository != null) {
+        await _measurementsRepository.saveMeasurementsBatch(state.measurements);
+      }
       state = state.copyWith(
         isAutosaving: false,
         hasUnsavedChanges: false,
@@ -664,5 +1084,6 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
 final markupControllerProvider =
     StateNotifierProvider.family<MarkupController, DrawingViewerState, String>((ref, drawingId) {
   final repo = ref.watch(markupsRepositoryProvider);
-  return MarkupController(repo, drawingId);
+  final measRepo = ref.watch(measurementsRepositoryProvider);
+  return MarkupController(repo, drawingId, measurementsRepository: measRepo);
 });
