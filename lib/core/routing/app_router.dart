@@ -11,6 +11,8 @@ import '../../features/drawings/presentation/screens/revision_comparison_screen.
 import '../../features/drawings/domain/models/drawing.dart';
 import '../../features/drawings/domain/models/drawing_type.dart';
 import '../../features/issues/presentation/screens/issues_screen.dart';
+import '../../features/issues/presentation/screens/issue_details_screen.dart';
+import '../../features/photos/presentation/screens/photo_viewer_screen.dart';
 import '../../features/inspections/presentation/screens/inspections_screen.dart';
 import '../../features/inspections/presentation/screens/inspection_details_screen.dart';
 import '../../features/equipment/presentation/screens/equipment_screen.dart';
@@ -21,12 +23,11 @@ import '../../features/calculations/presentation/screens/calculations_screen.dar
 import '../../features/takeoff/presentation/screens/takeoff_screen.dart';
 import '../../features/reports/presentation/screens/reports_screen.dart';
 import '../../features/sync/presentation/screens/sync_center_screen.dart';
+import '../../features/ai/presentation/screens/ai_assistant_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/settings/presentation/screens/diagnostics_screen.dart';
-import '../../shared/widgets/tablet_scaffold.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
-final GlobalKey<NavigatorState> _shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shell');
 
 final GoRouter appRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
@@ -44,20 +45,45 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const PinLoginScreen(),
     ),
 
-    // 3. Drawing Fullscreen Details / Vector PDF Inspection View
+    // Screen 1: Home Dashboard (Tablet Native Full-Width without Side Bar)
+    GoRoute(
+      path: '/dashboard',
+      builder: (context, state) => const DashboardScreen(),
+    ),
+
+    // Screen 2: Project List
+    GoRoute(
+      path: '/projects',
+      builder: (context, state) => const ProjectListScreen(),
+      routes: [
+        GoRoute(
+          path: ':id',
+          builder: (context, state) {
+            final projectId = state.pathParameters['id'] ?? '';
+            return ProjectDetailsScreen(projectId: projectId);
+          },
+        ),
+      ],
+    ),
+
+    // Screen 3: Drawing List
+    GoRoute(
+      path: '/drawings',
+      builder: (context, state) => const DrawingListScreen(),
+    ),
+
+    // Screen 4 & 5: Drawing Fullscreen Details / Vector Canvas & Measurement Tools
     GoRoute(
       path: '/drawings/:id/view',
-      parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) {
         final drawingId = state.pathParameters['id'] ?? '';
         return DrawingDetailsScreen(drawingId: drawingId);
       },
     ),
 
-    // 4. Drawing Revision Comparison View
+    // Screen 11: Drawing Revision Comparison View
     GoRoute(
       path: '/drawings/:id/compare',
-      parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) {
         final drawingId = state.pathParameters['id'] ?? '';
         final extraDrawing = state.extra as Drawing?;
@@ -80,126 +106,101 @@ final GoRouter appRouter = GoRouter(
       },
     ),
 
-    // 5. Inspection Details / Interactive Checklist Fullscreen View
+    // Screen 6: Field Issues & Punch List
     GoRoute(
-      path: '/inspections/:id',
-      parentNavigatorKey: _rootNavigatorKey,
+      path: '/issues',
+      builder: (context, state) => const IssuesScreen(),
+      routes: [
+        GoRoute(
+          path: ':id',
+          builder: (context, state) {
+            final issueId = state.pathParameters['id'] ?? '102';
+            return IssueDetailsScreen(issueId: issueId);
+          },
+        ),
+      ],
+    ),
+
+    // Screen 7: Photo Viewer & Gallery
+    GoRoute(
+      path: '/photos/:id',
       builder: (context, state) {
-        final inspectionId = state.pathParameters['id'] ?? '';
-        return InspectionDetailsScreen(inspectionId: inspectionId);
+        final photoId = state.pathParameters['id'];
+        return PhotoViewerScreen(photoId: photoId);
       },
     ),
 
-    // 6. QR / Barcode Fullscreen Scanner
+    // Screen 8: Field Inspections & Interactive Checklist
+    GoRoute(
+      path: '/inspections',
+      builder: (context, state) => const InspectionsScreen(),
+      routes: [
+        GoRoute(
+          path: ':id',
+          builder: (context, state) {
+            final inspectionId = state.pathParameters['id'] ?? '';
+            return InspectionDetailsScreen(inspectionId: inspectionId);
+          },
+        ),
+      ],
+    ),
+
+    // Equipment Master & QR Scanner
+    GoRoute(
+      path: '/equipment',
+      builder: (context, state) => const EquipmentScreen(),
+    ),
     GoRoute(
       path: '/qr-scanner',
-      parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const EquipmentQrScannerScreen(),
     ),
 
-    // Tablet Shell Route (Persistent Navigation Rail / Sidebar & Top Bar)
-    ShellRoute(
-      navigatorKey: _shellNavigatorKey,
-      builder: (context, state, child) {
-        return TabletScaffold(
-          currentPath: state.uri.toString(),
-          child: child,
-        );
-      },
-      routes: [
-        // Dashboard
-        GoRoute(
-          path: '/dashboard',
-          builder: (context, state) => const DashboardScreen(),
-        ),
+    // Screen 9: Engineering Calculators
+    GoRoute(
+      path: '/calculations',
+      builder: (context, state) => const CalculationsScreen(),
+    ),
 
-        // Project List
-        GoRoute(
-          path: '/projects',
-          builder: (context, state) => const ProjectListScreen(),
-          routes: [
-            GoRoute(
-              path: ':id',
-              builder: (context, state) {
-                final projectId = state.pathParameters['id'] ?? '';
-                return ProjectDetailsScreen(projectId: projectId);
-              },
-            ),
-          ],
-        ),
+    // Screen 10: Material Takeoff (MTO / BOM)
+    GoRoute(
+      path: '/takeoff',
+      builder: (context, state) => const TakeoffScreen(),
+    ),
 
-        // Drawing List
-        GoRoute(
-          path: '/drawings',
-          builder: (context, state) => const DrawingListScreen(),
-        ),
+    // Screen 12: Offline & Sync Center
+    GoRoute(
+      path: '/sync',
+      builder: (context, state) => const SyncCenterScreen(),
+    ),
+    GoRoute(
+      path: '/offline-downloads',
+      builder: (context, state) => const OfflineDownloadManagerScreen(),
+    ),
+    GoRoute(
+      path: '/offline-data',
+      builder: (context, state) => const OfflineDataScreen(),
+    ),
 
-        // Phase 4: Field Issues & Punch List
-        GoRoute(
-          path: '/issues',
-          builder: (context, state) => const IssuesScreen(),
-        ),
+    // Screen 13: Reports & Export
+    GoRoute(
+      path: '/reports',
+      builder: (context, state) => const ReportsScreen(),
+    ),
 
-        // Phase 4: Field Inspections
-        GoRoute(
-          path: '/inspections',
-          builder: (context, state) => const InspectionsScreen(),
-        ),
+    // Screen 14: AI Assistant
+    GoRoute(
+      path: '/ai-assistant',
+      builder: (context, state) => const AiAssistantScreen(),
+    ),
 
-        // Phase 4: Equipment Master
-        GoRoute(
-          path: '/equipment',
-          builder: (context, state) => const EquipmentScreen(),
-        ),
-
-        // Phase 5: Sync Center & Cloud Bridge
-        GoRoute(
-          path: '/sync',
-          builder: (context, state) => const SyncCenterScreen(),
-        ),
-
-        // Engineering Calculators
-        GoRoute(
-          path: '/calculations',
-          builder: (context, state) => const CalculationsScreen(),
-        ),
-
-        // Material Takeoff & Bill of Materials (MTO / BOM)
-        GoRoute(
-          path: '/takeoff',
-          builder: (context, state) => const TakeoffScreen(),
-        ),
-
-        // Offline Download Manager
-        GoRoute(
-          path: '/offline-downloads',
-          builder: (context, state) => const OfflineDownloadManagerScreen(),
-        ),
-
-        // Offline Data & Cache Inspector
-        GoRoute(
-          path: '/offline-data',
-          builder: (context, state) => const OfflineDataScreen(),
-        ),
-
-        // Phase 6: Diagnostics & Database Health
-        GoRoute(
-          path: '/diagnostics',
-          builder: (context, state) => const DiagnosticsScreen(),
-        ),
-
-        // Field Reports Generator
-        GoRoute(
-          path: '/reports',
-          builder: (context, state) => const ReportsScreen(),
-        ),
-
-        // Settings
-        GoRoute(
-          path: '/settings',
-          builder: (context, state) => const SettingsScreen(),
-        ),
-      ],
+    // Settings & Diagnostics
+    GoRoute(
+      path: '/diagnostics',
+      builder: (context, state) => const DiagnosticsScreen(),
+    ),
+    GoRoute(
+      path: '/settings',
+      builder: (context, state) => const SettingsScreen(),
     ),
   ],
 );

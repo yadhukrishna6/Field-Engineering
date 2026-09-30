@@ -1,615 +1,301 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
-import 'package:intl/intl.dart';
-import 'package:printing/printing.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
+import 'package:go_router/go_router.dart';
 import '../../../../core/theme/color_palette.dart';
-import '../../../../core/providers/core_providers.dart';
-import '../../domain/models/inspection.dart';
-import '../../domain/models/inspection_item.dart';
-import '../widgets/signature_pad_dialog.dart';
-import '../../../issues/domain/models/issue.dart';
-import '../../../photos/domain/models/photo_attachment.dart';
-import '../../../photos/presentation/widgets/photo_attachment_grid.dart';
+import '../../../../shared/widgets/digital_signature_pad.dart';
 
 class InspectionDetailsScreen extends ConsumerStatefulWidget {
   final String inspectionId;
 
-  const InspectionDetailsScreen({
-    super.key,
-    required this.inspectionId,
-  });
+  const InspectionDetailsScreen({super.key, required this.inspectionId});
 
   @override
   ConsumerState<InspectionDetailsScreen> createState() => _InspectionDetailsScreenState();
 }
 
 class _InspectionDetailsScreenState extends ConsumerState<InspectionDetailsScreen> {
-  Inspection? _inspection;
-  List<PhotoAttachment> _photos = [];
-  bool _isLoading = true;
-  final _uuid = const Uuid();
+  final TextEditingController _commentsController = TextEditingController(
+    text: 'Installation verified. Minor adjustment required on support location.',
+  );
+
+  final List<Map<String, dynamic>> _checklist = [
+    {'title': 'Pipe installed as per drawing', 'status': 'Pass'},
+    {'title': 'Correct diameter and material', 'status': 'Pass'},
+    {'title': 'Flange installed', 'status': 'Pending'},
+    {'title': 'Valve installed', 'status': 'Pass'},
+    {'title': 'Support installed', 'status': 'Fail'},
+    {'title': 'Welding completed', 'status': 'N/A'},
+    {'title': 'Insulating completed', 'status': 'Pending'},
+    {'title': 'Hydro test completed', 'status': 'N/A'},
+  ];
 
   @override
-  void initState() {
-    super.initState();
-    _loadInspection();
+  void dispose() {
+    _commentsController.dispose();
+    super.dispose();
   }
 
-  Future<void> _loadInspection() async {
-    final repo = ref.read(inspectionsRepositoryProvider);
-    final photosRepo = ref.read(photosRepositoryProvider);
-
-    final item = await repo.getInspectionById(widget.inspectionId);
-    final photos = await photosRepo.getPhotosByInspection(widget.inspectionId);
-
-    if (mounted) {
-      setState(() {
-        _inspection = item;
-        _photos = photos;
-        _isLoading = false;
-      });
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'Pass':
+        return const Color(0xFF16A34A);
+      case 'Pending':
+        return const Color(0xFFD97706);
+      case 'Fail':
+        return const Color(0xFFDC2626);
+      default:
+        return Colors.grey;
     }
   }
 
-  void _updateItemStatus(InspectionItem item, ChecklistStatus newStatus) async {
-    if (_inspection == null) return;
-    final updatedItem = item.copyWith(status: newStatus);
-
-    await ref.read(inspectionsRepositoryProvider).updateInspectionItem(updatedItem);
-
-    final updatedItems = _inspection!.items.map((i) => i.id == item.id ? updatedItem : i).toList();
+  void _cycleStatus(int index) {
     setState(() {
-      _inspection = _inspection!.copyWith(
-        items: updatedItems,
-        updatedAt: DateTime.now(),
-      );
+      final current = _checklist[index]['status'];
+      if (current == 'Pass') {
+        _checklist[index]['status'] = 'Pending';
+      } else if (current == 'Pending') {
+        _checklist[index]['status'] = 'Fail';
+      } else if (current == 'Fail') {
+        _checklist[index]['status'] = 'N/A';
+      } else {
+        _checklist[index]['status'] = 'Pass';
+      }
     });
-  }
-
-  void _editItemComments(InspectionItem item) {
-    final controller = TextEditingController(text: item.comments ?? '');
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Comments for "${item.description}"'),
-        content: TextField(
-          controller: controller,
-          maxLines: 4,
-          decoration: const InputDecoration(
-            hintText: 'Enter field observations, non-conformance notes or remedial actions...',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final updated = item.copyWith(comments: controller.text.trim());
-              await ref.read(inspectionsRepositoryProvider).updateInspectionItem(updated);
-
-              final updatedList = _inspection!.items.map((i) => i.id == item.id ? updated : i).toList();
-              setState(() {
-                _inspection = _inspection!.copyWith(items: updatedList);
-              });
-            },
-            child: const Text('Save Comment'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _createPunchItemFromFailure(InspectionItem item) async {
-    if (_inspection == null) return;
-
-    final issuesRepo = ref.read(issuesRepositoryProvider);
-    final issue = Issue(
-      id: _uuid.v4(),
-      projectId: _inspection!.projectId,
-      drawingId: _inspection!.drawingId,
-      inspectionId: _inspection!.id,
-      title: 'FAILED: ${item.description}',
-      description: item.comments?.isNotEmpty == true
-          ? item.comments!
-          : 'Failed inspection item during ${_inspection!.inspectionType} audit: ${item.description}',
-      category: IssueCategory.fromString(_inspection!.inspectionType),
-      priority: IssuePriority.high,
-      status: IssueStatus.open,
-      createdBy: _inspection!.inspectorName,
-      dueDate: DateFormat('yyyy-MM-dd').format(DateTime.now().add(const Duration(days: 3))),
-      latitude: _inspection!.latitude,
-      longitude: _inspection!.longitude,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-
-    await issuesRepo.saveIssue(issue);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Punch list item created for failed item: ${item.description}'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    }
-  }
-
-  void _captureInspectorSignature() async {
-    if (_inspection == null) return;
-    final path = await showDialog<String>(
-      context: context,
-      builder: (ctx) => SignaturePadDialog(
-        title: 'QC Inspector Signature',
-        signatoryName: _inspection!.inspectorName,
-      ),
-    );
-
-    if (path != null && mounted) {
-      final updated = _inspection!.copyWith(
-        inspectorSignaturePath: path,
-        updatedAt: DateTime.now(),
-      );
-      await ref.read(inspectionsRepositoryProvider).updateInspection(updated);
-      setState(() => _inspection = updated);
-    }
-  }
-
-  void _captureClientSignature() async {
-    if (_inspection == null) return;
-    final path = await showDialog<String>(
-      context: context,
-      builder: (ctx) => SignaturePadDialog(
-        title: 'Client / Representative Signature',
-        signatoryName: 'Client Field Engineer',
-      ),
-    );
-
-    if (path != null && mounted) {
-      final updated = _inspection!.copyWith(
-        clientSignaturePath: path,
-        status: InspectionStatus.approved,
-        updatedAt: DateTime.now(),
-      );
-      await ref.read(inspectionsRepositoryProvider).updateInspection(updated);
-      setState(() => _inspection = updated);
-    }
-  }
-
-  Future<void> _exportCertificatePdf() async {
-    if (_inspection == null) return;
-
-    final doc = pw.Document();
-    final item = _inspection!;
-    final nowStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
-
-    // Load inspector signature image if available
-    pw.MemoryImage? inspectorSigImg;
-    if (item.inspectorSignaturePath != null && !kIsWeb && File(item.inspectorSignaturePath!).existsSync()) {
-      inspectorSigImg = pw.MemoryImage(File(item.inspectorSignaturePath!).readAsBytesSync());
-    }
-
-    pw.MemoryImage? clientSigImg;
-    if (item.clientSignaturePath != null && !kIsWeb && File(item.clientSignaturePath!).existsSync()) {
-      clientSigImg = pw.MemoryImage(File(item.clientSignaturePath!).readAsBytesSync());
-    }
-
-    doc.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        build: (pw.Context context) {
-          return [
-            // Certificate Title Banner
-            pw.Container(
-              padding: const pw.EdgeInsets.all(12),
-              decoration: pw.BoxDecoration(
-                color: PdfColors.blueGrey800,
-                borderRadius: pw.BorderRadius.circular(6),
-              ),
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text('OFFICIAL FIELD INSPECTION CERTIFICATE',
-                          style: pw.TextStyle(color: PdfColors.white, fontSize: 16, fontWeight: pw.FontWeight.bold)),
-                      pw.Text('EPC Quality Assurance & Field Engineering Verification',
-                          style: const pw.TextStyle(color: PdfColors.white, fontSize: 9)),
-                    ],
-                  ),
-                  pw.Text(item.status.label.toUpperCase(),
-                      style: pw.TextStyle(color: PdfColors.amberAccent, fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                ],
-              ),
-            ),
-            pw.SizedBox(height: 14),
-
-            // Metadata Table
-            pw.Table(
-              border: pw.TableBorder.all(color: PdfColors.grey300),
-              children: [
-                pw.TableRow(
-                  children: [
-                    _pdfCell('Inspection Title:', item.title, bold: true),
-                    _pdfCell('Inspection Type:', item.inspectionType),
-                  ],
-                ),
-                pw.TableRow(
-                  children: [
-                    _pdfCell('Inspector Name:', item.inspectorName),
-                    _pdfCell('Inspection Date:', DateFormat('yyyy-MM-dd').format(item.inspectionDate)),
-                  ],
-                ),
-                pw.TableRow(
-                  children: [
-                    _pdfCell('GPS Coordinates:', item.latitude != null ? '${item.latitude!.toStringAsFixed(6)}°, ${item.longitude!.toStringAsFixed(6)}°' : 'Site Location'),
-                    _pdfCell('Completion:', '${(item.completionPercentage * 100).toInt()}% (Pass: ${item.passCount}, Fail: ${item.failCount})'),
-                  ],
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 16),
-
-            // Checklist Items Table
-            pw.Text('CHECKLIST VERIFICATION ITEMS', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
-            pw.SizedBox(height: 6),
-            pw.Table.fromTextArray(
-              headers: ['#', 'Inspection Item Description', 'Result', 'Comments & Notes'],
-              data: item.items.asMap().entries.map((e) {
-                final idx = e.key + 1;
-                final it = e.value;
-                return [
-                  idx.toString(),
-                  it.description,
-                  it.status.label,
-                  it.comments ?? '-',
-                ];
-              }).toList(),
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
-              cellStyle: const pw.TextStyle(fontSize: 8.5),
-              cellPadding: const pw.EdgeInsets.all(5),
-            ),
-            pw.SizedBox(height: 20),
-
-            // Dual Signature Section
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                // Inspector
-                pw.Container(
-                  width: 220,
-                  padding: const pw.EdgeInsets.all(8),
-                  decoration: pw.BoxDecoration(border: pw.TableBorder.all(color: PdfColors.grey400)),
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text('QC Inspector Verification', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
-                      pw.SizedBox(height: 4),
-                      if (inspectorSigImg != null)
-                        pw.Image(inspectorSigImg, height: 45)
-                      else
-                        pw.Container(height: 45, child: pw.Center(child: pw.Text('[Inspector Signed Locally]', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)))),
-                      pw.Divider(height: 1),
-                      pw.Text('Name: ${item.inspectorName}', style: const pw.TextStyle(fontSize: 8)),
-                      pw.Text('Date: $nowStr', style: const pw.TextStyle(fontSize: 8)),
-                    ],
-                  ),
-                ),
-
-                // Client / Owner Representative
-                pw.Container(
-                  width: 220,
-                  padding: const pw.EdgeInsets.all(8),
-                  decoration: pw.BoxDecoration(border: pw.TableBorder.all(color: PdfColors.grey400)),
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text('Client / Representative Acceptance', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
-                      pw.SizedBox(height: 4),
-                      if (clientSigImg != null)
-                        pw.Image(clientSigImg, height: 45)
-                      else
-                        pw.Container(height: 45, child: pw.Center(child: pw.Text('[Pending Client Signature]', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)))),
-                      pw.Divider(height: 1),
-                      pw.Text('Status: ${item.status.label}', style: const pw.TextStyle(fontSize: 8)),
-                      pw.Text('Date: $nowStr', style: const pw.TextStyle(fontSize: 8)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ];
-        },
-      ),
-    );
-
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => doc.save(),
-      name: 'Inspection_Certificate_${item.id.substring(0, 8)}.pdf',
-    );
-  }
-
-  pw.Widget _pdfCell(String label, String value, {bool bold = false}) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.all(6),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text(label, style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
-          pw.Text(value, style: pw.TextStyle(fontSize: 9, fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    if (_isLoading || _inspection == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    final item = _inspection!;
-
     return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(item.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            Text(
-              '${item.inspectionType} Inspection Checklist • Inspector: ${item.inspectorName}',
-              style: const TextStyle(fontSize: 11, color: AppColors.darkTextMuted),
-            ),
-          ],
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : Colors.black87),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/inspections');
+            }
+          },
+        ),
+        title: Text(
+          'Piping Inspection',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 18,
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
+          ),
         ),
         actions: [
-          OutlinedButton.icon(
-            onPressed: _exportCertificatePdf,
-            icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
-            label: const Text('Export Certificate PDF'),
-          ),
-          const SizedBox(width: 12),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top Summary Bar with KPI Tiles & Signatures
-            Row(
-              children: [
-                _buildStatBadge('PASS', item.passCount, Colors.green, isDark),
-                const SizedBox(width: 12),
-                _buildStatBadge('FAIL', item.failCount, Colors.redAccent, isDark),
-                const SizedBox(width: 12),
-                _buildStatBadge('PENDING', item.pendingCount, Colors.orangeAccent, isDark),
-                const SizedBox(width: 12),
-                _buildStatBadge('N/A', item.naCount, Colors.grey, isDark),
-                const Spacer(),
-
-                // Inspector Signature Action
-                OutlinedButton.icon(
-                  onPressed: _captureInspectorSignature,
-                  icon: Icon(
-                    item.inspectorSignaturePath != null ? Icons.verified : Icons.draw_rounded,
-                    color: item.inspectorSignaturePath != null ? Colors.green : AppColors.safetyOrange,
-                    size: 18,
-                  ),
-                  label: Text(item.inspectorSignaturePath != null ? 'Inspector Signed ✓' : 'Sign as Inspector'),
-                ),
-                const SizedBox(width: 12),
-
-                // Client Signature Action
-                ElevatedButton.icon(
-                  onPressed: _captureClientSignature,
-                  icon: Icon(
-                    item.clientSignaturePath != null ? Icons.verified : Icons.fact_check_rounded,
-                    size: 18,
-                  ),
-                  label: Text(item.clientSignaturePath != null ? 'Client Approved ✓' : 'Client Approval Sign'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: item.clientSignaturePath != null ? Colors.green : AppColors.safetyOrange,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ],
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16A34A).withOpacity(0.15),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFF16A34A).withOpacity(0.4)),
             ),
-            const SizedBox(height: 20),
-
-            // Checklist Items Header
-            const Text(
-              'Inspection Checklist Items',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-
-            // Checklist Items Table / List
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: item.items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final chkItem = item.items[index];
-                return _buildChecklistItemCard(chkItem, index + 1, isDark);
-              },
-            ),
-            const SizedBox(height: 24),
-
-            // Photo Attachments Section
-            PhotoAttachmentGrid(
-              photos: _photos,
-              inspectionId: item.id,
-              onPhotoAdded: (p) async {
-                await ref.read(photosRepositoryProvider).savePhoto(p);
-                setState(() => _photos.add(p));
-              },
-              onPhotoDeleted: (photoId) async {
-                await ref.read(photosRepositoryProvider).deletePhoto(photoId);
-                setState(() => _photos.removeWhere((p) => p.id == photoId));
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatBadge(String label, int count, Color color, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.4)),
-      ),
-      child: Row(
-        children: [
-          Text('$label: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: color)),
-          Text(count.toString(), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: color)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChecklistItemCard(InspectionItem chkItem, int number, bool isDark) {
-    final isFail = chkItem.status == ChecklistStatus.fail;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isFail ? Colors.redAccent : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
-          width: isFail ? 1.5 : 1.0,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Number Tag
-              Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white12 : Colors.black12,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    number.toString(),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
+            child: const Center(
+              child: Text(
+                'In Progress',
+                style: TextStyle(
+                  color: Color(0xFF16A34A),
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(width: 12),
-
-              // Description
-              Expanded(
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.more_vert_rounded, color: isDark ? Colors.white70 : Colors.black54),
+            onPressed: () {},
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                physics: const BouncingScrollPhysics(),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      chkItem.description,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                    ),
-                    if (chkItem.comments != null && chkItem.comments!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          'Note: ${chkItem.comments}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isFail ? Colors.redAccent : AppColors.darkTextMuted,
-                            fontStyle: FontStyle.italic,
+                    // Checklist Container (matching Screen 8)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
                           ),
+                        ],
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _checklist.length,
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+                        ),
+                        itemBuilder: (context, index) {
+                          final item = _checklist[index];
+                          final status = item['status'] as String;
+                          final statusColor = _getStatusColor(status);
+                          final isPassed = status == 'Pass';
+
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: isPassed ? const Color(0xFF2563EB) : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: isPassed ? const Color(0xFF2563EB) : (isDark ? Colors.white38 : Colors.black38),
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: isPassed ? const Icon(Icons.check, size: 16, color: Colors.white) : null,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    item['title'],
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ),
+                                InkWell(
+                                  onTap: () => _cycleStatus(index),
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: statusColor.withOpacity(0.4)),
+                                    ),
+                                    child: Text(
+                                      status,
+                                      style: TextStyle(
+                                        color: statusColor,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Comments Box
+                    Text(
+                      'Comments',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
                         ),
                       ),
+                      child: TextField(
+                        controller: _commentsController,
+                        maxLines: 3,
+                        style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 13),
+                        decoration: const InputDecoration(
+                          hintText: 'Add QA/QC inspector notes...',
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.all(14),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+            ),
 
-              // Status Toggle Buttons (PASS, FAIL, N/A, PENDING)
-              Wrap(
-                spacing: 6,
-                children: [
-                  _buildStatusButton(chkItem, ChecklistStatus.pass, Colors.green),
-                  _buildStatusButton(chkItem, ChecklistStatus.fail, Colors.redAccent),
-                  _buildStatusButton(chkItem, ChecklistStatus.na, Colors.grey),
-                  _buildStatusButton(chkItem, ChecklistStatus.pending, Colors.orangeAccent),
-                ],
-              ),
-            ],
-          ),
-
-          // Actions Row: Comment & Punch List conversion for FAIL items
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              TextButton.icon(
-                onPressed: () => _editItemComments(chkItem),
-                icon: const Icon(Icons.comment_outlined, size: 14),
-                label: Text(
-                  chkItem.comments != null && chkItem.comments!.isNotEmpty ? 'Edit Note' : 'Add Note',
-                  style: const TextStyle(fontSize: 11),
-                ),
-              ),
-              if (isFail) ...[
-                const SizedBox(width: 10),
-                TextButton.icon(
-                  onPressed: () => _createPunchItemFromFailure(chkItem),
-                  icon: const Icon(Icons.add_task_rounded, size: 14, color: Colors.redAccent),
-                  label: const Text(
-                    'Generate Punch List Item',
-                    style: TextStyle(fontSize: 11, color: Colors.redAccent, fontWeight: FontWeight.bold),
+            // Bottom Action Bar (matching Screen 8)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                border: Border(
+                  top: BorderSide(
+                    color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
                   ),
                 ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusButton(InspectionItem item, ChecklistStatus status, Color color) {
-    final isSelected = item.status == status;
-
-    return InkWell(
-      onTap: () => _updateItemStatus(item, status),
-      borderRadius: BorderRadius.circular(6),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? color : color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: isSelected ? color : color.withOpacity(0.3)),
-        ),
-        child: Text(
-          status.label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : color,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-            fontSize: 11,
-          ),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.camera_alt_outlined, color: Color(0xFF2563EB)),
+                    tooltip: 'Attach Inspection Photo',
+                    onPressed: () => context.push('/photos/sample'),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.mic_none_rounded, color: Color(0xFFD97706)),
+                    tooltip: 'Record Voice Note',
+                    onPressed: () {},
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () async {
+                        final sig = await DigitalSignaturePadDialog.show(
+                          context,
+                          documentTitle: 'Piping Inspection Completion Sign-off',
+                        );
+                        if (sig != null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Inspection completed and digitally signed!')),
+                          );
+                        }
+                      },
+                      child: const Text(
+                        'Complete Inspection',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

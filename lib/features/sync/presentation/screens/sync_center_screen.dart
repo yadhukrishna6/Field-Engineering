@@ -1,386 +1,326 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-import '../../../../core/sync/conflict_resolver.dart';
-import '../../../../core/sync/sync_engine.dart';
-import '../../../../core/sync/sync_queue_item.dart';
-import '../../../../core/sync/sync_status_provider.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_text_styles.dart';
-import '../widgets/conflict_dialog.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/offline/offline_sync_manager.dart';
+import '../../../../core/theme/color_palette.dart';
 
-class SyncCenterScreen extends ConsumerStatefulWidget {
+class SyncCenterScreen extends ConsumerWidget {
   const SyncCenterScreen({super.key});
 
   @override
-  ConsumerState<SyncCenterScreen> createState() => _SyncCenterScreenState();
-}
-
-class _SyncCenterScreenState extends ConsumerState<SyncCenterScreen> {
-
-  @override
-  Widget build(BuildContext context) {
-    final engine = ref.watch(syncEngineProvider);
-    final statusAsync = ref.watch(syncStatusStreamProvider);
-    final queueAsync = ref.watch(syncQueueListProvider);
-
-    final status = statusAsync.value ??
-        SyncEngineStatus(
-          state: SyncEngineState.synced,
-          pendingCount: 0,
-          failedCount: 0,
-          conflictCount: 0,
-          isOnline: true,
-        );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final syncState = ref.watch(offlineSyncProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Row(
-          children: [
-            const Icon(Icons.sync_alt, color: AppColors.accent),
-            const SizedBox(width: 12),
-            Text(
-              'Offline Sync Center & Cloud Bridge',
-              style: AppTextStyles.titleMedium.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          ],
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : Colors.black87),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/dashboard');
+            }
+          },
+        ),
+        title: Text(
+          'Offline & Sync',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 20,
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
+          ),
         ),
         actions: [
-          // Simulated Desert Offline / Online Switch
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceDark,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white24),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  engine.isOnline ? Icons.wifi : Icons.wifi_off,
-                  color: engine.isOnline ? Colors.greenAccent : Colors.amberAccent,
-                  size: 16,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  engine.isOnline ? 'Online (Connected)' : 'Desert Field (Offline)',
-                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(width: 8),
-                Switch(
-                  value: engine.isOnline,
-                  activeColor: Colors.greenAccent,
-                  onChanged: (val) {
-                    engine.setConnectivity(val);
-                  },
-                ),
-              ],
-            ),
-          ),
-          // Manual Sync Now Button
-          Padding(
-            padding: const EdgeInsets.only(right: 16, top: 8, bottom: 8),
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-              ),
-              icon: status.state == SyncEngineState.syncing
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.sync, size: 18),
-              label: const Text('Sync Now', style: TextStyle(fontWeight: FontWeight.bold)),
-              onPressed: status.state == SyncEngineState.syncing
-                  ? null
-                  : () async {
-                      final success = await engine.triggerSync();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(success ? 'Synchronization completed successfully.' : 'Sync failed. Local data preserved.'),
-                            backgroundColor: success ? Colors.green : Colors.red,
-                          ),
-                        );
-                      }
-                    },
-            ),
+          IconButton(
+            icon: Icon(Icons.more_vert_rounded, color: isDark ? Colors.white70 : Colors.black54),
+            onPressed: () {},
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Status Metrics Row
-            _buildMetricsRow(status),
-            const SizedBox(height: 24),
-
-            // Sync Queue Section Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Pending & Processed Sync Queue', style: AppTextStyles.titleMedium.copyWith(color: Colors.white)),
-                    const Text(
-                      'Local database operations queued for cloud replication. Local changes are never lost.',
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Top Offline Mode Banner (matching Screen 12)
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF0F392B), Color(0xFF064E3B)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
-                TextButton.icon(
-                  icon: const Icon(Icons.cleaning_services, size: 16),
-                  label: const Text('Clear Synced'),
-                  onPressed: () async {
-                    await engine.clearCompletedSyncedItems();
-                    ref.invalidate(syncQueueListProvider);
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(
+                        Icons.cloud_done_rounded,
+                        color: Colors.greenAccent,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Offline Mode',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFD97706),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Text(
+                                  'Offline',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'All data available locally on this tablet',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Storage and Resource Breakdown Cards (matching Screen 12)
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    _buildResourceRow(
+                      icon: Icons.layers_rounded,
+                      iconColor: const Color(0xFFDC2626),
+                      title: 'Drawings (24)',
+                      size: '120 MB',
+                      isDark: isDark,
+                    ),
+                    const Divider(height: 20),
+                    _buildResourceRow(
+                      icon: Icons.photo_library_rounded,
+                      iconColor: const Color(0xFF2563EB),
+                      title: 'Photos (56)',
+                      size: '220 MB',
+                      isDark: isDark,
+                    ),
+                    const Divider(height: 20),
+                    _buildResourceRow(
+                      icon: Icons.precision_manufacturing_rounded,
+                      iconColor: const Color(0xFF7C3AED),
+                      title: 'Equipment (56)',
+                      size: '0 MB',
+                      isDark: isDark,
+                    ),
+                    const Divider(height: 20),
+                    _buildResourceRow(
+                      icon: Icons.warning_amber_rounded,
+                      iconColor: const Color(0xFFD97706),
+                      title: 'Issues (12)',
+                      size: '5 MB',
+                      isDark: isDark,
+                    ),
+                    const Divider(height: 20),
+                    _buildResourceRow(
+                      icon: Icons.check_circle_rounded,
+                      iconColor: const Color(0xFF16A34A),
+                      title: 'Inspections (8)',
+                      size: '2 MB',
+                      isDark: isDark,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Storage Meter Progress Card
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Storage Used',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white70 : const Color(0xFF334155),
+                          ),
+                        ),
+                        Text(
+                          '347 MB / 5 GB',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: const LinearProgressIndicator(
+                        value: 0.07, // 347 MB / 5000 MB
+                        minHeight: 10,
+                        backgroundColor: Color(0xFFE2E8F0),
+                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Sync Now Primary Button
+              SizedBox(
+                height: 52,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 2,
+                  ),
+                  icon: const Icon(Icons.sync_rounded, size: 22),
+                  label: const Text(
+                    'Sync Now',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  onPressed: () {
+                    ref.read(offlineSyncProvider.notifier).triggerSync();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Synchronization batch completed! Local DB updated.')),
+                    );
                   },
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
+              ),
+              const SizedBox(height: 12),
 
-            // Queue List
-            queueAsync.when(
-              data: (queue) {
-                if (queue.isEmpty) {
-                  return _buildEmptyQueueCard();
-                }
-                return ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: queue.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final item = queue[index];
-                    return _buildQueueItemCard(item, engine);
-                  },
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Text('Error loading queue: $e', style: const TextStyle(color: Colors.red)),
-            ),
-          ],
+              const Center(
+                child: Text(
+                  'Last synced: 28 Sep 2026 16:20',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildMetricsRow(SyncEngineStatus status) {
+  Widget _buildResourceRow({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String size,
+    required bool isDark,
+  }) {
     return Row(
       children: [
-        _buildMetricCard(
-          title: 'Sync State',
-          value: status.displayBadge,
-          icon: Icons.cloud_sync,
-          color: status.state == SyncEngineState.synced
-              ? Colors.greenAccent
-              : (status.state == SyncEngineState.offline ? Colors.grey : Colors.amberAccent),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: iconColor, size: 20),
         ),
-        const SizedBox(width: 12),
-        _buildMetricCard(
-          title: 'Pending Queue',
-          value: '${status.pendingCount}',
-          icon: Icons.pending_actions,
-          color: status.pendingCount > 0 ? Colors.amberAccent : Colors.white70,
+        const SizedBox(width: 14),
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
+          ),
         ),
-        const SizedBox(width: 12),
-        _buildMetricCard(
-          title: 'Conflicts',
-          value: '${status.conflictCount}',
-          icon: Icons.warning_amber_rounded,
-          color: status.conflictCount > 0 ? Colors.redAccent : Colors.white70,
-        ),
-        const SizedBox(width: 12),
-        _buildMetricCard(
-          title: 'Failed Ops',
-          value: '${status.failedCount}',
-          icon: Icons.error_outline,
-          color: status.failedCount > 0 ? Colors.redAccent : Colors.white70,
+        Text(
+          size,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white70 : Colors.black87,
+          ),
         ),
       ],
-    );
-  }
-
-  Widget _buildMetricCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color color,
-  }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.cardDark,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white10),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(title, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                Icon(icon, color: color, size: 20),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyQueueCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
-        color: AppColors.cardDark,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        children: [
-          const Icon(Icons.cloud_done_outlined, size: 48, color: Colors.greenAccent),
-          const SizedBox(height: 12),
-          const Text('All Field Data Synchronized', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          const Text(
-            'No pending operations in local queue. All markups, inspections, and drawings are up to date with cloud server.',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQueueItemCard(SyncQueueItem item, SyncEngine engine) {
-    Color statusColor;
-    switch (item.status) {
-      case SyncStatus.pending:
-        statusColor = Colors.amberAccent;
-        break;
-      case SyncStatus.syncing:
-        statusColor = Colors.lightBlueAccent;
-        break;
-      case SyncStatus.synced:
-        statusColor = Colors.greenAccent;
-        break;
-      case SyncStatus.failed:
-        statusColor = Colors.redAccent;
-        break;
-      case SyncStatus.conflict:
-        statusColor = Colors.orangeAccent;
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.cardDark,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: item.status == SyncStatus.conflict ? Colors.orangeAccent : Colors.white10,
-        ),
-      ),
-      child: Row(
-        children: [
-          // Operation Badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceDark,
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: AppColors.accent.withOpacity(0.5)),
-            ),
-            child: Text(
-              item.operation.name.toUpperCase(),
-              style: const TextStyle(color: AppColors.accent, fontSize: 11, fontWeight: FontWeight.bold),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Entity Type & ID
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${item.entityType.toUpperCase()} — ID: ${item.entityId.substring(0, item.entityId.length > 12 ? 12 : item.entityId.length)}...',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Enqueued: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(item.createdAt)} ${item.retryCount > 0 ? "• Retries: ${item.retryCount}" : ""}',
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          // Status Pill
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              item.status.name.toUpperCase(),
-              style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold),
-            ),
-          ),
-          if (item.status == SyncStatus.conflict) ...[
-            const SizedBox(width: 8),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orangeAccent,
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              ),
-              onPressed: () {
-                final conflict = SyncConflictRecord.create(
-                  entityType: item.entityType,
-                  entityId: item.entityId,
-                  localPayload: {'id': item.entityId, 'status': 'Modified locally in field'},
-                  serverPayload: {'id': item.entityId, 'status': 'Updated on Cloud Portal'},
-                  localVersion: 2,
-                  serverVersion: 3,
-                );
-                showDialog(
-                  context: context,
-                  builder: (ctx) => ConflictResolutionDialog(
-                    conflict: conflict,
-                    onResolve: (strategy, merged) async {
-                      await engine.resolveConflict(
-                        queueId: item.id,
-                        strategy: strategy,
-                        mergedPayload: merged,
-                      );
-                      ref.invalidate(syncQueueListProvider);
-                    },
-                  ),
-                );
-              },
-              child: const Text('Resolve', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-            ),
-          ],
-        ],
-      ),
     );
   }
 }

@@ -1,210 +1,394 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../domain/models/drawing.dart';
 import '../../domain/models/drawing_type.dart';
 import '../controllers/drawings_controller.dart';
-import '../widgets/drawing_card.dart';
 import '../widgets/drawing_import_modal.dart';
-import '../../../../shared/widgets/app_search_field.dart';
-import '../../../../shared/widgets/loading_state_view.dart';
-import '../../../../shared/widgets/error_state_view.dart';
-import '../../../../shared/widgets/empty_state_view.dart';
 import '../../../../core/theme/color_palette.dart';
 
-class DrawingListScreen extends ConsumerWidget {
-  const DrawingListScreen({super.key});
+class DrawingListScreen extends ConsumerStatefulWidget {
+  final String? projectName;
+
+  const DrawingListScreen({
+    super.key,
+    this.projectName,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DrawingListScreen> createState() => _DrawingListScreenState();
+}
+
+class _DrawingListScreenState extends ConsumerState<DrawingListScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 4, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final state = ref.watch(allDrawingsNotifierProvider);
-    final filter = ref.watch(drawingsFilterProvider);
+    final title = widget.projectName ?? 'Daleel Oil Field';
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_rounded, color: isDark ? Colors.white : Colors.black87),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/projects');
+            }
+          },
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 18,
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.search_rounded, color: isDark ? Colors.white70 : Colors.black54),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: Icon(Icons.tune_rounded, color: isDark ? Colors.white70 : Colors.black54),
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.add_to_photos_rounded, color: Color(0xFF2563EB)),
+            tooltip: 'Import PDF Drawing',
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                builder: (context) => const DrawingImportModal(),
+              );
+            },
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          labelColor: const Color(0xFF2563EB),
+          unselectedLabelColor: isDark ? Colors.white54 : Colors.black54,
+          indicatorColor: const Color(0xFF2563EB),
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          tabs: const [
+            Tab(text: 'Drawings (24)'),
+            Tab(text: 'Issues (12)'),
+            Tab(text: 'Inspections (8)'),
+            Tab(text: 'Equipment (56)'),
+          ],
+        ),
+      ),
+      body: SafeArea(
+        child: TabBarView(
+          controller: _tabController,
           children: [
-            // Search and Controls Bar
-            Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: AppSearchField(
-                    hintText: 'Search drawings by tag, drawing number, title, or system...',
-                    onChanged: (query) {
-                      ref.read(drawingsFilterProvider.notifier).state = filter.copyWith(searchQuery: query);
-                      ref.read(allDrawingsNotifierProvider.notifier).loadDrawings();
-                    },
-                  ),
-                ),
-                const SizedBox(width: 16),
-                // Offline Only Toggle Chip
-                FilterChip(
-                  label: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.offline_pin_rounded, size: 14, color: AppColors.online),
-                      SizedBox(width: 6),
-                      Text('Downloaded Only'),
-                    ],
-                  ),
-                  selected: filter.downloadedOnly == true,
-                  onSelected: (selected) {
-                    ref.read(drawingsFilterProvider.notifier).state = filter.copyWith(
-                      downloadedOnly: selected ? true : null,
-                    );
-                    ref.read(allDrawingsNotifierProvider.notifier).loadDrawings();
-                  },
-                ),
-                const SizedBox(width: 16),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.safetyOrange,
-                    foregroundColor: Colors.white,
-                  ),
-                  icon: const Icon(Icons.add_to_photos_rounded, size: 18),
-                  label: const Text('Import PDF'),
-                  onPressed: () {
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (context) => const DrawingImportModal(),
-                    );
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
+            // Tab 1: Drawings List (Screen 3)
+            _buildDrawingsTab(context, isDark, state.drawings),
 
-            // Discipline Filter Chips Bar
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildDisciplineChip(
-                    ref: ref,
-                    label: 'All Disciplines',
-                    isSelected: filter.typeFilter == null,
-                    onSelected: () {
-                      ref.read(drawingsFilterProvider.notifier).state = filter.copyWith(clearType: true);
-                      ref.read(allDrawingsNotifierProvider.notifier).loadDrawings();
-                    },
-                  ),
-                  ...DrawingType.values.map((type) {
-                    return Padding(
-                      padding: const EdgeInsets.only(left: 8.0),
-                      child: _buildDisciplineChip(
-                        ref: ref,
-                        label: type.displayName,
-                        isSelected: filter.typeFilter == type,
-                        icon: type.icon,
-                        color: type.color,
-                        onSelected: () {
-                          ref.read(drawingsFilterProvider.notifier).state = filter.copyWith(typeFilter: type);
-                          ref.read(allDrawingsNotifierProvider.notifier).loadDrawings();
-                        },
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
+            // Tab 2: Issues Quick Tab
+            _buildIssuesRedirect(context),
 
-            // Main Drawings Grid / Content Area
-            Expanded(
-              child: Builder(
-                builder: (context) {
-                  if (state.isLoading && state.drawings.isEmpty) {
-                    return const LoadingStateView(message: 'Loading offline drawing registry...');
-                  }
+            // Tab 3: Inspections Quick Tab
+            _buildInspectionsRedirect(context),
 
-                  if (state.errorMessage != null && state.drawings.isEmpty) {
-                    return ErrorStateView(
-                      message: state.errorMessage!,
-                      onRetry: () => ref.read(allDrawingsNotifierProvider.notifier).loadDrawings(),
-                    );
-                  }
-
-                  if (state.drawings.isEmpty) {
-                    return EmptyStateView(
-                      icon: Icons.layers_clear_rounded,
-                      title: 'No Drawings Found',
-                      message: filter.searchQuery.isNotEmpty || filter.typeFilter != null
-                          ? 'No engineering drawings match the current filter criteria.'
-                          : 'No drawings have been imported to this tablet yet.',
-                      actionLabel: 'Import Drawing PDF',
-                      onAction: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          builder: (context) => const DrawingImportModal(),
-                        );
-                      },
-                    );
-                  }
-
-                  return LayoutBuilder(
-                    builder: (context, constraints) {
-                      final crossAxisCount = constraints.maxWidth > 1100 ? 3 : 2;
-
-                      return GridView.builder(
-                        itemCount: state.drawings.length,
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: crossAxisCount,
-                          crossAxisSpacing: 18,
-                          mainAxisSpacing: 18,
-                          childAspectRatio: 1.6,
-                        ),
-                        itemBuilder: (context, index) {
-                          final drawing = state.drawings[index];
-                          return DrawingCard(
-                            drawing: drawing,
-                            onTap: () {
-                              context.go('/drawings/${drawing.id}/view');
-                            },
-                          );
-                        },
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
+            // Tab 4: Equipment Quick Tab
+            _buildEquipmentRedirect(context),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDisciplineChip({
-    required WidgetRef ref,
-    required String label,
-    required bool isSelected,
-    required VoidCallback onSelected,
-    IconData? icon,
-    Color? color,
-  }) {
-    return ChoiceChip(
-      selected: isSelected,
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null && color != null) ...[
-            Icon(icon, size: 14, color: isSelected ? Colors.white : color),
-            const SizedBox(width: 6),
-          ],
-          Text(label),
+  Widget _buildDrawingsTab(BuildContext context, bool isDark, List<Drawing> drawings) {
+    final sampleDrawings = drawings.isNotEmpty
+        ? drawings
+        : [
+            Drawing(
+              id: 'dwg-p-402',
+              projectId: 'prj-001',
+              drawingNumber: 'P-102 - Hook-up Isometric',
+              title: 'Crude Separation Train Hook-Up Isometric',
+              drawingType: DrawingType.isometric,
+              revision: 'Rev 02',
+              filePath: 'assets/sample_drawings/isometric_sample.pdf',
+              pageCount: 3,
+              fileSize: 9017753, // ~8.6 MB
+              downloaded: true,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ),
+            Drawing(
+              id: 'dwg-p-101',
+              projectId: 'prj-001',
+              drawingNumber: 'P-101 - Piping Plan',
+              title: 'General Area Piping Layout & Elevation',
+              drawingType: DrawingType.piping,
+              revision: 'Rev 03',
+              filePath: 'assets/sample_drawings/piping_sample.pdf',
+              pageCount: 4,
+              fileSize: 13002342, // ~12.4 MB
+              downloaded: true,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ),
+            Drawing(
+              id: 'dwg-p-103',
+              projectId: 'prj-001',
+              drawingNumber: 'P-103 - P&ID',
+              title: 'Process & Instrumentation Diagram - Flare Header',
+              drawingType: DrawingType.pid,
+              revision: 'Rev 05',
+              filePath: 'assets/sample_drawings/pid_drawing_sample.pdf',
+              pageCount: 2,
+              fileSize: 6501171, // ~6.2 MB
+              downloaded: false,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ),
+            Drawing(
+              id: 'dwg-s-101',
+              projectId: 'prj-001',
+              drawingNumber: 'S-101 - Structural Plan',
+              title: 'Pipe Rack Support Structural Foundation',
+              drawingType: DrawingType.structural,
+              revision: 'Rev 01',
+              filePath: 'assets/sample_drawings/structural_sample.pdf',
+              pageCount: 5,
+              fileSize: 10590617, // ~10.1 MB
+              downloaded: true,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            ),
+          ];
+
+    return Column(
+      children: [
+        // Search & Filter input bar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: _searchController,
+              style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Search drawings...',
+                hintStyle: TextStyle(
+                  color: isDark ? Colors.white38 : Colors.black38,
+                  fontSize: 13,
+                ),
+                prefixIcon: Icon(
+                  Icons.search_rounded,
+                  color: isDark ? Colors.white54 : Colors.black45,
+                  size: 20,
+                ),
+                suffixIcon: IconButton(
+                  icon: Icon(Icons.tune_rounded, color: isDark ? Colors.white54 : Colors.black45, size: 20),
+                  onPressed: () {},
+                ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+          ),
+        ),
+
+        // Drawings List
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            physics: const BouncingScrollPhysics(),
+            itemCount: sampleDrawings.length,
+            itemBuilder: (context, index) {
+              final drawing = sampleDrawings[index];
+              return _buildDrawingCard(context, isDark, drawing);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDrawingCard(BuildContext context, bool isDark, Drawing drawing) {
+    final sizeMb = (drawing.fileSize / (1024 * 1024)).toStringAsFixed(1);
+    final isDownloaded = drawing.downloaded;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
-      onSelected: (_) => onSelected(),
-      selectedColor: color ?? AppColors.primary,
-      labelStyle: TextStyle(
-        color: isSelected ? Colors.white : AppColors.darkTextSecondary,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-        fontSize: 12,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          context.push('/drawings/${drawing.id}/view');
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              // Drawing Vector / Blueprint Thumbnail
+              Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: Center(
+                  child: Icon(
+                    drawing.drawingType.icon,
+                    color: const Color(0xFF2563EB),
+                    size: 32,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+
+              // Title & Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      drawing.drawingNumber,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${drawing.revision}  |  PDF  |  $sizeMb MB',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white54 : Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+
+                    // Download status badge
+                    if (isDownloaded)
+                      const Row(
+                        children: [
+                          Icon(Icons.check_circle_rounded, size: 14, color: Color(0xFF16A34A)),
+                          SizedBox(width: 4),
+                          Text(
+                            'Downloaded',
+                            style: TextStyle(
+                              color: Color(0xFF16A34A),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      const Row(
+                        children: [
+                          Icon(Icons.cloud_download_outlined, size: 14, color: Color(0xFFD97706)),
+                          SizedBox(width: 4),
+                          Text(
+                            'Not Downloaded',
+                            style: TextStyle(
+                              color: Color(0xFFD97706),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+
+              // Trailing chevron
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: isDark ? Colors.white30 : Colors.black26,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIssuesRedirect(BuildContext context) {
+    return Center(
+      child: ElevatedButton.icon(
+        icon: const Icon(Icons.report_problem_rounded),
+        label: const Text('Open Project Punch List (12 Issues)'),
+        onPressed: () => context.push('/issues'),
+      ),
+    );
+  }
+
+  Widget _buildInspectionsRedirect(BuildContext context) {
+    return Center(
+      child: ElevatedButton.icon(
+        icon: const Icon(Icons.checklist_rounded),
+        label: const Text('Open Inspections (8 Checklists)'),
+        onPressed: () => context.push('/inspections'),
+      ),
+    );
+  }
+
+  Widget _buildEquipmentRedirect(BuildContext context) {
+    return Center(
+      child: ElevatedButton.icon(
+        icon: const Icon(Icons.precision_manufacturing_rounded),
+        label: const Text('Open Equipment Master (56 Items)'),
+        onPressed: () => context.push('/equipment'),
       ),
     );
   }
