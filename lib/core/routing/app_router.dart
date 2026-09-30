@@ -7,6 +7,10 @@ import '../../features/projects/presentation/screens/project_list_screen.dart';
 import '../../features/projects/presentation/screens/project_details_screen.dart';
 import '../../features/drawings/presentation/screens/drawing_list_screen.dart';
 import '../../features/drawings/presentation/screens/drawing_details_screen.dart';
+import '../../features/issues/presentation/screens/issues_screen.dart';
+import '../../features/inspections/presentation/screens/inspections_screen.dart';
+import '../../features/inspections/presentation/screens/inspection_details_screen.dart';
+import '../../features/equipment/presentation/screens/equipment_screen.dart';
 import '../../features/offline_manager/presentation/screens/offline_download_manager_screen.dart';
 import '../../features/offline_manager/presentation/screens/offline_data_screen.dart';
 import '../../features/calculations/presentation/screens/calculations_screen.dart';
@@ -44,6 +48,16 @@ final GoRouter appRouter = GoRouter(
       },
     ),
 
+    // Inspection Details / Interactive Checklist Fullscreen View
+    GoRoute(
+      path: '/inspections/:id',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) {
+        final inspectionId = state.pathParameters['id'] ?? '';
+        return InspectionDetailsScreen(inspectionId: inspectionId);
+      },
+    ),
+
     // Tablet Shell Route (Persistent Navigation Rail / Sidebar & Top Bar)
     ShellRoute(
       navigatorKey: _shellNavigatorKey,
@@ -54,18 +68,17 @@ final GoRouter appRouter = GoRouter(
         );
       },
       routes: [
-        // 3. Dashboard
+        // Dashboard
         GoRoute(
           path: '/dashboard',
           builder: (context, state) => const DashboardScreen(),
         ),
 
-        // 4. Project List
+        // Project List
         GoRoute(
           path: '/projects',
           builder: (context, state) => const ProjectListScreen(),
           routes: [
-            // 5. Project Details
             GoRoute(
               path: ':id',
               builder: (context, state) {
@@ -76,25 +89,31 @@ final GoRouter appRouter = GoRouter(
           ],
         ),
 
-        // 6. Drawing List
+        // Drawing List
         GoRoute(
           path: '/drawings',
           builder: (context, state) => const DrawingListScreen(),
         ),
 
-        // 8. Offline Download Manager
+        // Phase 4: Field Issues & Punch List
         GoRoute(
-          path: '/offline-downloads',
-          builder: (context, state) => const OfflineDownloadManagerScreen(),
+          path: '/issues',
+          builder: (context, state) => const IssuesScreen(),
         ),
 
-        // 9. Offline Data & Cache Inspector
+        // Phase 4: Field Inspections
         GoRoute(
-          path: '/offline-data',
-          builder: (context, state) => const OfflineDataScreen(),
+          path: '/inspections',
+          builder: (context, state) => const InspectionsScreen(),
         ),
 
-        // Field Engineering Calculations
+        // Phase 4: Equipment Master
+        GoRoute(
+          path: '/equipment',
+          builder: (context, state) => const EquipmentScreen(),
+        ),
+
+        // Engineering Calculators
         GoRoute(
           path: '/calculations',
           builder: (context, state) => const CalculationsScreen(),
@@ -106,13 +125,25 @@ final GoRouter appRouter = GoRouter(
           builder: (context, state) => const TakeoffScreen(),
         ),
 
+        // Offline Download Manager
+        GoRoute(
+          path: '/offline-downloads',
+          builder: (context, state) => const OfflineDownloadManagerScreen(),
+        ),
+
+        // Offline Data & Cache Inspector
+        GoRoute(
+          path: '/offline-data',
+          builder: (context, state) => const OfflineDataScreen(),
+        ),
+
         // Field Reports Generator
         GoRoute(
           path: '/reports',
           builder: (context, state) => const ReportsScreen(),
         ),
 
-        // 10. Settings
+        // Settings
         GoRoute(
           path: '/settings',
           builder: (context, state) => const SettingsScreen(),

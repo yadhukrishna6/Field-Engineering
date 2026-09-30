@@ -8,6 +8,14 @@ class DatabaseTables {
   static const String takeoffItems = 'takeoff_items';
   static const String savedCalculations = 'saved_calculations';
 
+  // Phase 4 Tables
+  static const String issues = 'issues';
+  static const String photos = 'photos';
+  static const String voiceNotes = 'voice_notes';
+  static const String inspections = 'inspections';
+  static const String inspectionItems = 'inspection_items';
+  static const String equipment = 'equipment';
+
   // Common Columns
   static const String colId = 'id';
   static const String colCreatedAt = 'created_at';
@@ -85,4 +93,43 @@ class DatabaseTables {
   static const String colProgress = 'progress';
   static const String colQueueStatus = 'queue_status';
   static const String colErrorMessage = 'error_message';
+
+  // Phase 4: Issues & Punchlist Columns
+  static const String colPositionX = 'position_x';
+  static const String colPositionY = 'position_y';
+  static const String colCategory = 'category';
+  static const String colPriority = 'priority';
+  static const String colAssignedTo = 'assigned_to';
+  static const String colDueDate = 'due_date';
+  static const String colEquipmentId = 'equipment_id';
+  static const String colInspectionId = 'inspection_id';
+  static const String colLatitude = 'latitude';
+  static const String colLongitude = 'longitude';
+  static const String colGpsAccuracy = 'gps_accuracy';
+
+  // Phase 4: Photos Columns
+  static const String colCaption = 'caption';
+  static const String colGpsTimestamp = 'gps_timestamp';
+  static const String colIssueId = 'issue_id';
+
+  // Phase 4: Voice Notes Columns
+  static const String colDurationSeconds = 'duration_seconds';
+
+  // Phase 4: Inspections & Checklists Columns
+  static const String colInspectionType = 'inspection_type';
+  static const String colInspectorName = 'inspector_name';
+  static const String colInspectorSignaturePath = 'inspector_signature_path';
+  static const String colClientSignaturePath = 'client_signature_path';
+  static const String colInspectionDate = 'inspection_date';
+  static const String colSummaryNotes = 'summary_notes';
+
+  // Phase 4: Inspection Items Columns
+  static const String colComments = 'comments';
+  static const String colPhotoIdsJson = 'photo_ids_json';
+  static const String colOrderIndex = 'order_index';
+
+  // Phase 4: Equipment Master Columns
+  static const String colEquipmentNumber = 'equipment_number';
+  static const String colTagNumber = 'tag_number';
+  static const String colPhotoPath = 'photo_path';
 }

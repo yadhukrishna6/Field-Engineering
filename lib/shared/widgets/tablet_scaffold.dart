@@ -26,12 +26,15 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
     if (path.startsWith('/dashboard')) return 0;
     if (path.startsWith('/projects')) return 1;
     if (path.startsWith('/drawings')) return 2;
-    if (path.startsWith('/offline-downloads')) return 3;
-    if (path.startsWith('/offline-data')) return 4;
-    if (path.startsWith('/calculations')) return 5;
-    if (path.startsWith('/takeoff')) return 6;
-    if (path.startsWith('/reports')) return 7;
-    if (path.startsWith('/settings')) return 8;
+    if (path.startsWith('/issues')) return 3;
+    if (path.startsWith('/inspections')) return 4;
+    if (path.startsWith('/equipment')) return 5;
+    if (path.startsWith('/calculations')) return 6;
+    if (path.startsWith('/takeoff')) return 7;
+    if (path.startsWith('/offline-downloads')) return 8;
+    if (path.startsWith('/offline-data')) return 9;
+    if (path.startsWith('/reports')) return 10;
+    if (path.startsWith('/settings')) return 11;
     return 0;
   }
 
@@ -47,21 +50,30 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
         context.go('/drawings');
         break;
       case 3:
-        context.go('/offline-downloads');
+        context.go('/issues');
         break;
       case 4:
-        context.go('/offline-data');
+        context.go('/inspections');
         break;
       case 5:
-        context.go('/calculations');
+        context.go('/equipment');
         break;
       case 6:
-        context.go('/takeoff');
+        context.go('/calculations');
         break;
       case 7:
-        context.go('/reports');
+        context.go('/takeoff');
         break;
       case 8:
+        context.go('/offline-downloads');
+        break;
+      case 9:
+        context.go('/offline-data');
+        break;
+      case 10:
+        context.go('/reports');
+        break;
+      case 11:
         context.go('/settings');
         break;
     }
@@ -134,7 +146,7 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
                               ),
                             ),
                             Text(
-                              'Offline Tablet Suite',
+                              'Complete Field Suite',
                               style: TextStyle(
                                 color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                                 fontSize: 11,
@@ -153,7 +165,7 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
                 // Navigation Items List
                 Expanded(
                   child: ListView(
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
                     children: [
                       _buildNavItem(
                         index: 0,
@@ -173,44 +185,68 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
                         icon: Icons.layers_rounded,
                         label: 'Drawings & P&ID',
                       ),
-                      const SizedBox(height: 12),
-                      _buildSectionHeader('OFFLINE & SYNC'),
+
+                      const SizedBox(height: 8),
+                      _buildSectionHeader('FIELD QUALITY & QA/QC (PHASE 4)'),
                       _buildNavItem(
                         index: 3,
                         selectedIndex: selectedIndex,
-                        icon: Icons.download_for_offline_rounded,
-                        label: 'Download Manager',
+                        icon: Icons.report_problem_rounded,
+                        label: 'Issues & Punch List',
                       ),
                       _buildNavItem(
                         index: 4,
                         selectedIndex: selectedIndex,
-                        icon: Icons.storage_rounded,
-                        label: 'Offline Data & Cache',
+                        icon: Icons.checklist_rounded,
+                        label: 'Field Inspections',
                       ),
-                      const SizedBox(height: 12),
-                      _buildSectionHeader('ENGINEERING & FIELD TOOLS (PHASE 3)'),
                       _buildNavItem(
                         index: 5,
+                        selectedIndex: selectedIndex,
+                        icon: Icons.precision_manufacturing_rounded,
+                        label: 'Equipment Master',
+                      ),
+
+                      const SizedBox(height: 8),
+                      _buildSectionHeader('ENGINEERING TOOLS'),
+                      _buildNavItem(
+                        index: 6,
                         selectedIndex: selectedIndex,
                         icon: Icons.calculate_rounded,
                         label: 'Calculators',
                       ),
                       _buildNavItem(
-                        index: 6,
+                        index: 7,
                         selectedIndex: selectedIndex,
                         icon: Icons.table_chart_rounded,
                         label: 'Material Takeoff (MTO)',
                       ),
+
+                      const SizedBox(height: 8),
+                      _buildSectionHeader('OFFLINE & SYNC'),
                       _buildNavItem(
-                        index: 7,
+                        index: 8,
+                        selectedIndex: selectedIndex,
+                        icon: Icons.download_for_offline_rounded,
+                        label: 'Download Manager',
+                      ),
+                      _buildNavItem(
+                        index: 9,
+                        selectedIndex: selectedIndex,
+                        icon: Icons.storage_rounded,
+                        label: 'Offline Data & Cache',
+                      ),
+                      _buildNavItem(
+                        index: 10,
                         selectedIndex: selectedIndex,
                         icon: Icons.description_rounded,
                         label: 'Reports & Export',
                       ),
-                      const SizedBox(height: 12),
+
+                      const SizedBox(height: 8),
                       _buildSectionHeader('SYSTEM'),
                       _buildNavItem(
-                        index: 8,
+                        index: 11,
                         selectedIndex: selectedIndex,
                         icon: Icons.settings_rounded,
                         label: 'Settings',
@@ -223,9 +259,9 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
 
                 // Bottom Engineer Profile & Lock PIN
                 Padding(
-                  padding: const EdgeInsets.all(14.0),
+                  padding: const EdgeInsets.all(12.0),
                   child: Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: isDark ? AppColors.darkSurfaceVariant : AppColors.lightSurfaceVariant,
                       borderRadius: BorderRadius.circular(10),
@@ -233,7 +269,7 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
                     child: Row(
                       children: [
                         CircleAvatar(
-                          radius: 18,
+                          radius: 16,
                           backgroundColor: AppColors.primary,
                           child: Text(
                             settings.engineerName.isNotEmpty
@@ -242,11 +278,11 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
-                              fontSize: 14,
+                              fontSize: 13,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -255,7 +291,7 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
                                 settings.engineerName,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 12,
+                                  fontSize: 11,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -264,7 +300,7 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
                                 settings.employeeId,
                                 style: TextStyle(
                                   color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                                  fontSize: 10,
+                                  fontSize: 9,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -273,7 +309,7 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.lock_outline_rounded, size: 18),
+                          icon: const Icon(Icons.lock_outline_rounded, size: 16),
                           tooltip: 'Lock Tablet Session',
                           onPressed: () => context.go('/pin-login'),
                         ),
@@ -367,7 +403,7 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
       child: Text(
         title,
         style: const TextStyle(
-          fontSize: 10,
+          fontSize: 9,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.0,
           color: AppColors.darkTextMuted,
@@ -394,7 +430,7 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
           borderRadius: BorderRadius.circular(10),
           onTap: () => _onDestinationSelected(index),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: isSelected
                   ? (isDark ? AppColors.darkSurfaceVariant : AppColors.lightSurfaceVariant)
@@ -408,18 +444,18 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
               children: [
                 Icon(
                   icon,
-                  size: 20,
+                  size: 18,
                   color: isSelected
                       ? AppColors.safetyOrange
                       : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     label,
                     style: TextStyle(
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      fontSize: 13,
+                      fontSize: 12,
                       color: isSelected
                           ? (isDark ? Colors.white : Colors.black)
                           : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
@@ -428,8 +464,8 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
                 ),
                 if (isSelected)
                   Container(
-                    width: 6,
-                    height: 6,
+                    width: 5,
+                    height: 5,
                     decoration: const BoxDecoration(
                       color: AppColors.safetyOrange,
                       shape: BoxShape.circle,
@@ -445,12 +481,12 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
 
   Widget _buildHeaderTitle(int selectedIndex) {
     String title = 'Field Engineering';
-    String subtitle = 'Tablet Operations';
+    String subtitle = 'Complete Offline Platform';
 
     switch (selectedIndex) {
       case 0:
         title = 'Field Dashboard';
-        subtitle = 'Key metrics, offline status & recent drawings';
+        subtitle = 'Key metrics, offline status & QA/QC summaries';
         break;
       case 1:
         title = 'Projects Directory';
@@ -461,22 +497,38 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
         subtitle = 'Vector engineering drawings, isometrics & schematics';
         break;
       case 3:
+        title = 'Field Issues & Punch List';
+        subtitle = 'Drawing pinned punch items, categories, priorities & status lifecycle';
+        break;
+      case 4:
+        title = 'Field Inspections & Checklists';
+        subtitle = 'Configurable checklists, digital signatures & PDF certificates';
+        break;
+      case 5:
+        title = 'Equipment Master Registry';
+        subtitle = 'Tag numbers, P&ID links, GPS locations & operational logs';
+        break;
+      case 6:
+        title = 'Engineering Calculations';
+        subtitle = 'Piping wall thickness, hydrotest pressure & flange torque';
+        break;
+      case 7:
+        title = 'Material Takeoff (MTO / BOM)';
+        subtitle = 'Bill of materials, takeoff counts & weight summaries';
+        break;
+      case 8:
         title = 'Offline Download Manager';
         subtitle = 'Pre-load drawing bundles before desert deployment';
         break;
-      case 4:
+      case 9:
         title = 'Offline Storage & Cache';
-        subtitle = 'Local database, PDFs, reports & attachments manager';
+        subtitle = 'Local database, photos, audio memos & signatures inspector';
         break;
-      case 5:
-        title = 'Field Engineering Calculations';
-        subtitle = 'Piping wall thickness, hydrotest pressure & flange torque';
-        break;
-      case 6:
-        title = 'Field Inspection Reports';
+      case 10:
+        title = 'Field Reports & Export';
         subtitle = 'Generate & export PDF reports offline';
         break;
-      case 7:
+      case 11:
         title = 'Tablet Configuration & Profile';
         subtitle = 'Security PIN, sync preferences & storage paths';
         break;

@@ -7,10 +7,8 @@ import '../../../../core/offline/network_status_state.dart';
 import '../controllers/dashboard_controller.dart';
 import '../../../projects/presentation/controllers/projects_controller.dart';
 import '../../../drawings/presentation/controllers/drawings_controller.dart';
-import '../../../../shared/widgets/status_badge.dart';
 import '../../../../shared/widgets/loading_state_view.dart';
 import '../../../../shared/widgets/error_state_view.dart';
-import '../../../projects/presentation/widgets/project_form_dialog.dart';
 import '../../../drawings/presentation/widgets/drawing_import_modal.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -344,8 +342,40 @@ class DashboardScreen extends ConsumerWidget {
       children: [
         Expanded(
           child: OutlinedButton.icon(
-            icon: const Icon(Icons.note_add_rounded, color: AppColors.safetyOrange),
-            label: const Text('Import PDF from Device'),
+            icon: const Icon(Icons.report_problem_rounded, color: Colors.redAccent),
+            label: const Text('Field Issues / Punch'),
+            onPressed: () => context.go('/issues'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.checklist_rounded, color: AppColors.safetyOrange),
+            label: const Text('Field Inspections'),
+            onPressed: () => context.go('/inspections'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.precision_manufacturing_rounded, color: Colors.blueAccent),
+            label: const Text('Equipment Master'),
+            onPressed: () => context.go('/equipment'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.calculate_rounded, color: Colors.tealAccent),
+            label: const Text('Calculators'),
+            onPressed: () => context.go('/calculations'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.note_add_rounded, color: AppColors.primaryLight),
+            label: const Text('Import PDF Drawing'),
             onPressed: () {
               showModalBottomSheet(
                 context: context,
@@ -353,35 +383,6 @@ class DashboardScreen extends ConsumerWidget {
                 builder: (context) => const DrawingImportModal(),
               );
             },
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.create_new_folder_rounded, color: AppColors.primaryLight),
-            label: const Text('Create New Project'),
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) => const ProjectFormDialog(),
-              );
-            },
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.calculate_rounded, color: Colors.tealAccent),
-            label: const Text('Field Calculations'),
-            onPressed: () => context.go('/calculations'),
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.picture_as_pdf_rounded, color: Colors.purpleAccent),
-            label: const Text('Export Daily Report'),
-            onPressed: () => context.go('/reports'),
           ),
         ),
       ],

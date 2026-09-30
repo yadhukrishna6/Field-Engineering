@@ -43,7 +43,7 @@ class AppDatabase {
 
       return await openDatabase(
         dbPath,
-        version: 2,
+        version: 3,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
       );
@@ -55,7 +55,7 @@ class AppDatabase {
   Future<void> _onCreate(Database db, int version) async {
     final batch = db.batch();
 
-    // Projects Table
+    // 1. Projects Table
     batch.execute('''
       CREATE TABLE ${DatabaseTables.projects} (
         ${DatabaseTables.colId} TEXT PRIMARY KEY,
@@ -70,7 +70,7 @@ class AppDatabase {
       )
     ''');
 
-    // Drawings Table
+    // 2. Drawings Table
     batch.execute('''
       CREATE TABLE ${DatabaseTables.drawings} (
         ${DatabaseTables.colId} TEXT PRIMARY KEY,
@@ -90,7 +90,7 @@ class AppDatabase {
       )
     ''');
 
-    // Download Queue Table
+    // 3. Download Queue Table
     batch.execute('''
       CREATE TABLE ${DatabaseTables.downloadQueue} (
         ${DatabaseTables.colId} TEXT PRIMARY KEY,
@@ -104,7 +104,7 @@ class AppDatabase {
       )
     ''');
 
-    // Markups Table
+    // 4. Markups Table
     batch.execute('''
       CREATE TABLE IF NOT EXISTS ${DatabaseTables.markups} (
         ${DatabaseTables.colId} TEXT PRIMARY KEY,
@@ -126,7 +126,7 @@ class AppDatabase {
       )
     ''');
 
-    // Calibrations Table (Phase 3)
+    // 5. Calibrations Table
     batch.execute('''
       CREATE TABLE IF NOT EXISTS ${DatabaseTables.calibrations} (
         ${DatabaseTables.colId} TEXT PRIMARY KEY,
@@ -145,7 +145,7 @@ class AppDatabase {
       )
     ''');
 
-    // Measurements Table (Phase 3)
+    // 6. Measurements Table
     batch.execute('''
       CREATE TABLE IF NOT EXISTS ${DatabaseTables.measurements} (
         ${DatabaseTables.colId} TEXT PRIMARY KEY,
@@ -164,7 +164,7 @@ class AppDatabase {
       )
     ''');
 
-    // Material Takeoff (MTO / BOM) Table (Phase 3)
+    // 7. Material Takeoff (MTO) Table
     batch.execute('''
       CREATE TABLE IF NOT EXISTS ${DatabaseTables.takeoffItems} (
         ${DatabaseTables.colId} TEXT PRIMARY KEY,
@@ -186,7 +186,7 @@ class AppDatabase {
       )
     ''');
 
-    // Saved Calculations Table (Phase 3)
+    // 8. Saved Calculations Table
     batch.execute('''
       CREATE TABLE IF NOT EXISTS ${DatabaseTables.savedCalculations} (
         ${DatabaseTables.colId} TEXT PRIMARY KEY,
@@ -201,7 +201,134 @@ class AppDatabase {
       )
     ''');
 
-    // Indexes for fast tablet search and filters
+    // 9. Phase 4: Issues Table (Punch List & Field Non-Conformances)
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.issues} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colProjectId} TEXT NOT NULL,
+        ${DatabaseTables.colDrawingId} TEXT,
+        ${DatabaseTables.colPageNumber} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colPositionX} REAL,
+        ${DatabaseTables.colPositionY} REAL,
+        ${DatabaseTables.colTitle} TEXT NOT NULL,
+        ${DatabaseTables.colDescription} TEXT NOT NULL,
+        ${DatabaseTables.colCategory} TEXT NOT NULL DEFAULT 'Piping',
+        ${DatabaseTables.colPriority} TEXT NOT NULL DEFAULT 'Medium',
+        ${DatabaseTables.colStatus} TEXT NOT NULL DEFAULT 'Open',
+        ${DatabaseTables.colAssignedTo} TEXT,
+        ${DatabaseTables.colCreatedBy} TEXT NOT NULL,
+        ${DatabaseTables.colDueDate} TEXT,
+        ${DatabaseTables.colEquipmentId} TEXT,
+        ${DatabaseTables.colInspectionId} TEXT,
+        ${DatabaseTables.colLatitude} REAL,
+        ${DatabaseTables.colLongitude} REAL,
+        ${DatabaseTables.colGpsAccuracy} REAL,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
+        ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    // 10. Phase 4: Photos / Media Attachments Table
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.photos} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colFilePath} TEXT NOT NULL,
+        ${DatabaseTables.colThumbnailPath} TEXT,
+        ${DatabaseTables.colTitle} TEXT,
+        ${DatabaseTables.colCaption} TEXT,
+        ${DatabaseTables.colLatitude} REAL,
+        ${DatabaseTables.colLongitude} REAL,
+        ${DatabaseTables.colGpsAccuracy} REAL,
+        ${DatabaseTables.colGpsTimestamp} TEXT,
+        ${DatabaseTables.colDrawingId} TEXT,
+        ${DatabaseTables.colPageNumber} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colPositionX} REAL,
+        ${DatabaseTables.colPositionY} REAL,
+        ${DatabaseTables.colIssueId} TEXT,
+        ${DatabaseTables.colInspectionId} TEXT,
+        ${DatabaseTables.colEquipmentId} TEXT,
+        ${DatabaseTables.colFileSize} INTEGER NOT NULL DEFAULT 0,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    // 11. Phase 4: Voice Notes Table
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.voiceNotes} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colFilePath} TEXT NOT NULL,
+        ${DatabaseTables.colTitle} TEXT NOT NULL,
+        ${DatabaseTables.colDurationSeconds} INTEGER NOT NULL DEFAULT 0,
+        ${DatabaseTables.colDrawingId} TEXT,
+        ${DatabaseTables.colPageNumber} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colPositionX} REAL,
+        ${DatabaseTables.colPositionY} REAL,
+        ${DatabaseTables.colIssueId} TEXT,
+        ${DatabaseTables.colInspectionId} TEXT,
+        ${DatabaseTables.colCreatedBy} TEXT,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    // 12. Phase 4: Inspections Table
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.inspections} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colProjectId} TEXT NOT NULL,
+        ${DatabaseTables.colDrawingId} TEXT,
+        ${DatabaseTables.colEquipmentId} TEXT,
+        ${DatabaseTables.colTitle} TEXT NOT NULL,
+        ${DatabaseTables.colInspectionType} TEXT NOT NULL DEFAULT 'Piping',
+        ${DatabaseTables.colStatus} TEXT NOT NULL DEFAULT 'Draft',
+        ${DatabaseTables.colInspectorName} TEXT NOT NULL,
+        ${DatabaseTables.colInspectorSignaturePath} TEXT,
+        ${DatabaseTables.colClientSignaturePath} TEXT,
+        ${DatabaseTables.colInspectionDate} TEXT NOT NULL,
+        ${DatabaseTables.colSummaryNotes} TEXT,
+        ${DatabaseTables.colLatitude} REAL,
+        ${DatabaseTables.colLongitude} REAL,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
+        ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    // 13. Phase 4: Inspection Items Table
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.inspectionItems} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colInspectionId} TEXT NOT NULL,
+        ${DatabaseTables.colCategory} TEXT NOT NULL,
+        ${DatabaseTables.colDescription} TEXT NOT NULL,
+        ${DatabaseTables.colStatus} TEXT NOT NULL DEFAULT 'PENDING',
+        ${DatabaseTables.colComments} TEXT,
+        ${DatabaseTables.colPhotoIdsJson} TEXT,
+        ${DatabaseTables.colOrderIndex} INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (${DatabaseTables.colInspectionId}) REFERENCES ${DatabaseTables.inspections}(${DatabaseTables.colId}) ON DELETE CASCADE
+      )
+    ''');
+
+    // 14. Phase 4: Equipment Master Table
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.equipment} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colProjectId} TEXT NOT NULL,
+        ${DatabaseTables.colEquipmentNumber} TEXT NOT NULL,
+        ${DatabaseTables.colTagNumber} TEXT NOT NULL,
+        ${DatabaseTables.colName} TEXT NOT NULL,
+        ${DatabaseTables.colDrawingType} TEXT NOT NULL DEFAULT 'Pump',
+        ${DatabaseTables.colLocation} TEXT,
+        ${DatabaseTables.colDrawingId} TEXT,
+        ${DatabaseTables.colNotes} TEXT,
+        ${DatabaseTables.colPhotoPath} TEXT,
+        ${DatabaseTables.colLatitude} REAL,
+        ${DatabaseTables.colLongitude} REAL,
+        ${DatabaseTables.colStatus} TEXT NOT NULL DEFAULT 'Operational',
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
+        ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    // Fast Lookup Indexes
     batch.execute('CREATE INDEX IF NOT EXISTS idx_drawings_project_id ON ${DatabaseTables.drawings}(${DatabaseTables.colProjectId});');
     batch.execute('CREATE INDEX IF NOT EXISTS idx_drawings_type ON ${DatabaseTables.drawings}(${DatabaseTables.colDrawingType});');
     batch.execute('CREATE INDEX IF NOT EXISTS idx_projects_status ON ${DatabaseTables.projects}(${DatabaseTables.colStatus});');
@@ -211,94 +338,139 @@ class AppDatabase {
     batch.execute('CREATE INDEX IF NOT EXISTS idx_measurements_dwg_page ON ${DatabaseTables.measurements}(${DatabaseTables.colDrawingId}, ${DatabaseTables.colPageNumber});');
     batch.execute('CREATE INDEX IF NOT EXISTS idx_takeoff_project ON ${DatabaseTables.takeoffItems}(${DatabaseTables.colProjectId});');
     batch.execute('CREATE INDEX IF NOT EXISTS idx_takeoff_drawing ON ${DatabaseTables.takeoffItems}(${DatabaseTables.colDrawingId});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_issues_drawing_page ON ${DatabaseTables.issues}(${DatabaseTables.colDrawingId}, ${DatabaseTables.colPageNumber});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_issues_project ON ${DatabaseTables.issues}(${DatabaseTables.colProjectId});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_photos_drawing_page ON ${DatabaseTables.photos}(${DatabaseTables.colDrawingId}, ${DatabaseTables.colPageNumber});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_photos_issue ON ${DatabaseTables.photos}(${DatabaseTables.colIssueId});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_photos_inspection ON ${DatabaseTables.photos}(${DatabaseTables.colInspectionId});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_voice_drawing_page ON ${DatabaseTables.voiceNotes}(${DatabaseTables.colDrawingId}, ${DatabaseTables.colPageNumber});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_inspections_project ON ${DatabaseTables.inspections}(${DatabaseTables.colProjectId});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_inspection_items_inspection ON ${DatabaseTables.inspectionItems}(${DatabaseTables.colInspectionId});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_equipment_project ON ${DatabaseTables.equipment}(${DatabaseTables.colProjectId});');
 
     await batch.commit(noResult: true);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Create any missing tables on upgrade
+    // Ensure all Phase 3 and Phase 4 tables are created if migrating from earlier versions
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS ${DatabaseTables.markups} (
-        ${DatabaseTables.colId} TEXT PRIMARY KEY,
-        ${DatabaseTables.colDrawingId} TEXT NOT NULL,
-        ${DatabaseTables.colPageNumber} INTEGER NOT NULL DEFAULT 1,
-        ${DatabaseTables.colLayer} TEXT NOT NULL DEFAULT 'markup',
-        ${DatabaseTables.colMarkupType} TEXT NOT NULL,
-        ${DatabaseTables.colColor} INTEGER NOT NULL,
-        ${DatabaseTables.colFillColor} INTEGER,
-        ${DatabaseTables.colStrokeWidth} REAL NOT NULL DEFAULT 2.0,
-        ${DatabaseTables.colOpacity} REAL NOT NULL DEFAULT 1.0,
-        ${DatabaseTables.colGeometryData} TEXT NOT NULL,
-        ${DatabaseTables.colText} TEXT,
-        ${DatabaseTables.colMetadata} TEXT,
-        ${DatabaseTables.colCreatedBy} TEXT NOT NULL,
-        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
-        ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS ${DatabaseTables.calibrations} (
-        ${DatabaseTables.colId} TEXT PRIMARY KEY,
-        ${DatabaseTables.colDrawingId} TEXT NOT NULL,
-        ${DatabaseTables.colPageNumber} INTEGER NOT NULL DEFAULT 1,
-        ${DatabaseTables.colPoint1X} REAL NOT NULL,
-        ${DatabaseTables.colPoint1Y} REAL NOT NULL,
-        ${DatabaseTables.colPoint2X} REAL NOT NULL,
-        ${DatabaseTables.colPoint2Y} REAL NOT NULL,
-        ${DatabaseTables.colKnownDistance} REAL NOT NULL,
-        ${DatabaseTables.colScaleUnit} TEXT NOT NULL,
-        ${DatabaseTables.colScaleFactor} REAL NOT NULL,
-        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
-        ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS ${DatabaseTables.measurements} (
-        ${DatabaseTables.colId} TEXT PRIMARY KEY,
-        ${DatabaseTables.colDrawingId} TEXT NOT NULL,
-        ${DatabaseTables.colPageNumber} INTEGER NOT NULL DEFAULT 1,
-        ${DatabaseTables.colMeasurementType} TEXT NOT NULL,
-        ${DatabaseTables.colPointsData} TEXT NOT NULL,
-        ${DatabaseTables.colCalculatedValue} REAL NOT NULL,
-        ${DatabaseTables.colUnit} TEXT NOT NULL,
-        ${DatabaseTables.colCalibrationId} TEXT,
-        ${DatabaseTables.colLabel} TEXT,
-        ${DatabaseTables.colColor} INTEGER,
-        ${DatabaseTables.colMetadata} TEXT,
-        ${DatabaseTables.colCreatedAt} TEXT NOT NULL
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS ${DatabaseTables.takeoffItems} (
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.issues} (
         ${DatabaseTables.colId} TEXT PRIMARY KEY,
         ${DatabaseTables.colProjectId} TEXT NOT NULL,
         ${DatabaseTables.colDrawingId} TEXT,
-        ${DatabaseTables.colPageNumber} INTEGER DEFAULT 1,
-        ${DatabaseTables.colItemType} TEXT NOT NULL,
-        ${DatabaseTables.colItemName} TEXT NOT NULL,
-        ${DatabaseTables.colSpecification} TEXT,
-        ${DatabaseTables.colSize} TEXT,
-        ${DatabaseTables.colQuantity} REAL NOT NULL DEFAULT 1.0,
-        ${DatabaseTables.colUnit} TEXT NOT NULL DEFAULT 'pcs',
-        ${DatabaseTables.colUnitWeight} REAL DEFAULT 0.0,
-        ${DatabaseTables.colUnitCost} REAL DEFAULT 0.0,
-        ${DatabaseTables.colNotes} TEXT,
-        ${DatabaseTables.colLinkedCountTag} TEXT,
+        ${DatabaseTables.colPageNumber} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colPositionX} REAL,
+        ${DatabaseTables.colPositionY} REAL,
+        ${DatabaseTables.colTitle} TEXT NOT NULL,
+        ${DatabaseTables.colDescription} TEXT NOT NULL,
+        ${DatabaseTables.colCategory} TEXT NOT NULL DEFAULT 'Piping',
+        ${DatabaseTables.colPriority} TEXT NOT NULL DEFAULT 'Medium',
+        ${DatabaseTables.colStatus} TEXT NOT NULL DEFAULT 'Open',
+        ${DatabaseTables.colAssignedTo} TEXT,
+        ${DatabaseTables.colCreatedBy} TEXT NOT NULL,
+        ${DatabaseTables.colDueDate} TEXT,
+        ${DatabaseTables.colEquipmentId} TEXT,
+        ${DatabaseTables.colInspectionId} TEXT,
+        ${DatabaseTables.colLatitude} REAL,
+        ${DatabaseTables.colLongitude} REAL,
+        ${DatabaseTables.colGpsAccuracy} REAL,
         ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
         ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
       )
     ''');
+
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS ${DatabaseTables.savedCalculations} (
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.photos} (
         ${DatabaseTables.colId} TEXT PRIMARY KEY,
-        ${DatabaseTables.colProjectId} TEXT,
+        ${DatabaseTables.colFilePath} TEXT NOT NULL,
+        ${DatabaseTables.colThumbnailPath} TEXT,
+        ${DatabaseTables.colTitle} TEXT,
+        ${DatabaseTables.colCaption} TEXT,
+        ${DatabaseTables.colLatitude} REAL,
+        ${DatabaseTables.colLongitude} REAL,
+        ${DatabaseTables.colGpsAccuracy} REAL,
+        ${DatabaseTables.colGpsTimestamp} TEXT,
         ${DatabaseTables.colDrawingId} TEXT,
-        ${DatabaseTables.colCalcType} TEXT NOT NULL,
-        ${DatabaseTables.colTitle} TEXT NOT NULL,
-        ${DatabaseTables.colInputsJson} TEXT NOT NULL,
-        ${DatabaseTables.colResultsJson} TEXT NOT NULL,
-        ${DatabaseTables.colEngineerNotes} TEXT,
+        ${DatabaseTables.colPageNumber} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colPositionX} REAL,
+        ${DatabaseTables.colPositionY} REAL,
+        ${DatabaseTables.colIssueId} TEXT,
+        ${DatabaseTables.colInspectionId} TEXT,
+        ${DatabaseTables.colEquipmentId} TEXT,
+        ${DatabaseTables.colFileSize} INTEGER NOT NULL DEFAULT 0,
         ${DatabaseTables.colCreatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.voiceNotes} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colFilePath} TEXT NOT NULL,
+        ${DatabaseTables.colTitle} TEXT NOT NULL,
+        ${DatabaseTables.colDurationSeconds} INTEGER NOT NULL DEFAULT 0,
+        ${DatabaseTables.colDrawingId} TEXT,
+        ${DatabaseTables.colPageNumber} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colPositionX} REAL,
+        ${DatabaseTables.colPositionY} REAL,
+        ${DatabaseTables.colIssueId} TEXT,
+        ${DatabaseTables.colInspectionId} TEXT,
+        ${DatabaseTables.colCreatedBy} TEXT,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.inspections} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colProjectId} TEXT NOT NULL,
+        ${DatabaseTables.colDrawingId} TEXT,
+        ${DatabaseTables.colEquipmentId} TEXT,
+        ${DatabaseTables.colTitle} TEXT NOT NULL,
+        ${DatabaseTables.colInspectionType} TEXT NOT NULL DEFAULT 'Piping',
+        ${DatabaseTables.colStatus} TEXT NOT NULL DEFAULT 'Draft',
+        ${DatabaseTables.colInspectorName} TEXT NOT NULL,
+        ${DatabaseTables.colInspectorSignaturePath} TEXT,
+        ${DatabaseTables.colClientSignaturePath} TEXT,
+        ${DatabaseTables.colInspectionDate} TEXT NOT NULL,
+        ${DatabaseTables.colSummaryNotes} TEXT,
+        ${DatabaseTables.colLatitude} REAL,
+        ${DatabaseTables.colLongitude} REAL,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
+        ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.inspectionItems} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colInspectionId} TEXT NOT NULL,
+        ${DatabaseTables.colCategory} TEXT NOT NULL,
+        ${DatabaseTables.colDescription} TEXT NOT NULL,
+        ${DatabaseTables.colStatus} TEXT NOT NULL DEFAULT 'PENDING',
+        ${DatabaseTables.colComments} TEXT,
+        ${DatabaseTables.colPhotoIdsJson} TEXT,
+        ${DatabaseTables.colOrderIndex} INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (${DatabaseTables.colInspectionId}) REFERENCES ${DatabaseTables.inspections}(${DatabaseTables.colId}) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.equipment} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colProjectId} TEXT NOT NULL,
+        ${DatabaseTables.colEquipmentNumber} TEXT NOT NULL,
+        ${DatabaseTables.colTagNumber} TEXT NOT NULL,
+        ${DatabaseTables.colName} TEXT NOT NULL,
+        ${DatabaseTables.colDrawingType} TEXT NOT NULL DEFAULT 'Pump',
+        ${DatabaseTables.colLocation} TEXT,
+        ${DatabaseTables.colDrawingId} TEXT,
+        ${DatabaseTables.colNotes} TEXT,
+        ${DatabaseTables.colPhotoPath} TEXT,
+        ${DatabaseTables.colLatitude} REAL,
+        ${DatabaseTables.colLongitude} REAL,
+        ${DatabaseTables.colStatus} TEXT NOT NULL DEFAULT 'Operational',
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
+        ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
       )
     ''');
   }
