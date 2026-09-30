@@ -13,7 +13,7 @@ import 'core/database/app_database.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Database factory initialization for Web & Desktop
+  // Non-blocking database factory initialization
   if (kIsWeb) {
     databaseFactory = databaseFactoryFfiWeb;
   } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -21,13 +21,10 @@ void main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  // Pre-initialize local SQLite and storage manager
-  try {
-    await OfflineStorageManager.instance.initialize();
-    await AppDatabase.instance.database;
-  } catch (e) {
-    debugPrint('Database / Storage pre-init notice: $e');
-  }
+  // Pre-initialize in background without blocking UI startup
+  OfflineStorageManager.instance.initialize().catchError((e) {
+    debugPrint('Storage init notice: $e');
+  });
 
   runApp(
     const ProviderScope(

@@ -49,6 +49,19 @@ class AppDatabase {
         dbPath = p.join(appDocDir.path, 'field_engineering_v1.db');
       }
 
+      if (kIsWeb) {
+        return await factory.openDatabase(
+          inMemoryDatabasePath,
+          options: OpenDatabaseOptions(
+            version: 4,
+            onCreate: _onCreate,
+            onUpgrade: _onUpgrade,
+          ),
+        ).timeout(const Duration(milliseconds: 500), onTimeout: () {
+          return factory.openDatabase(inMemoryDatabasePath);
+        });
+      }
+
       return await factory.openDatabase(
         dbPath,
         options: OpenDatabaseOptions(

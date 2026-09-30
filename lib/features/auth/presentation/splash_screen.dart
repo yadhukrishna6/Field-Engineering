@@ -38,6 +38,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
     );
 
     _animationController.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.go('/dashboard');
+    });
     _initializeServices();
   }
 
