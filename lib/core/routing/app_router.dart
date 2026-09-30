@@ -7,6 +7,9 @@ import '../../features/projects/presentation/screens/project_list_screen.dart';
 import '../../features/projects/presentation/screens/project_details_screen.dart';
 import '../../features/drawings/presentation/screens/drawing_list_screen.dart';
 import '../../features/drawings/presentation/screens/drawing_details_screen.dart';
+import '../../features/drawings/presentation/screens/revision_comparison_screen.dart';
+import '../../features/drawings/domain/models/drawing.dart';
+import '../../features/drawings/domain/models/drawing_type.dart';
 import '../../features/issues/presentation/screens/issues_screen.dart';
 import '../../features/inspections/presentation/screens/inspections_screen.dart';
 import '../../features/inspections/presentation/screens/inspection_details_screen.dart';
@@ -16,6 +19,7 @@ import '../../features/offline_manager/presentation/screens/offline_data_screen.
 import '../../features/calculations/presentation/screens/calculations_screen.dart';
 import '../../features/takeoff/presentation/screens/takeoff_screen.dart';
 import '../../features/reports/presentation/screens/reports_screen.dart';
+import '../../features/sync/presentation/screens/sync_center_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../shared/widgets/tablet_scaffold.dart';
 
@@ -48,7 +52,33 @@ final GoRouter appRouter = GoRouter(
       },
     ),
 
-    // Inspection Details / Interactive Checklist Fullscreen View
+    // 4. Drawing Revision Comparison View
+    GoRoute(
+      path: '/drawings/:id/compare',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) {
+        final drawingId = state.pathParameters['id'] ?? '';
+        final extraDrawing = state.extra as Drawing?;
+        final drawing = extraDrawing ??
+            Drawing(
+              id: drawingId,
+              projectId: 'prj-001',
+              drawingNumber: 'DWG-P-402-01',
+              title: 'High Pressure Separation Piping P&ID',
+              drawingType: DrawingType.pid,
+              revision: 'Rev 01',
+              filePath: 'assets/sample_drawings/pid_drawing_sample.pdf',
+              pageCount: 1,
+              fileSize: 204800,
+              downloaded: true,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            );
+        return RevisionComparisonScreen(drawing: drawing);
+      },
+    ),
+
+    // 5. Inspection Details / Interactive Checklist Fullscreen View
     GoRoute(
       path: '/inspections/:id',
       parentNavigatorKey: _rootNavigatorKey,
@@ -111,6 +141,12 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: '/equipment',
           builder: (context, state) => const EquipmentScreen(),
+        ),
+
+        // Phase 5: Sync Center & Cloud Bridge
+        GoRoute(
+          path: '/sync',
+          builder: (context, state) => const SyncCenterScreen(),
         ),
 
         // Engineering Calculators

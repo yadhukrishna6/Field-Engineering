@@ -20,7 +20,14 @@ class InspectionsLocalDataSource {
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
 
-        // Insert / replace items
+        // Delete previous items for this inspection ID to prevent duplicate items
+        await txn.delete(
+          DatabaseTables.inspectionItems,
+          where: '${DatabaseTables.colInspectionId} = ?',
+          whereArgs: [inspection.id],
+        );
+
+        // Insert items
         for (final item in inspection.items) {
           await txn.insert(
             DatabaseTables.inspectionItems,
@@ -42,6 +49,12 @@ class InspectionsLocalDataSource {
           DatabaseTables.inspections,
           inspection.toMap(),
           where: '${DatabaseTables.colId} = ?',
+          whereArgs: [inspection.id],
+        );
+
+        await txn.delete(
+          DatabaseTables.inspectionItems,
+          where: '${DatabaseTables.colInspectionId} = ?',
           whereArgs: [inspection.id],
         );
 

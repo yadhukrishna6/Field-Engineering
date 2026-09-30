@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
+import '../../domain/models/drawing.dart';
 import '../../domain/models/drawing_type.dart';
 import '../../domain/models/markup.dart';
 import '../../domain/models/drawing_calibration.dart';
+import '../../domain/models/drawing_revision.dart';
 import '../controllers/drawings_controller.dart';
 import '../controllers/markup_controller.dart';
+import '../providers/revisions_provider.dart';
 import '../widgets/drawing_canvas_view.dart';
 import '../widgets/markup_toolbar.dart';
 import '../widgets/layer_management_panel.dart';
@@ -500,7 +503,11 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.more_vert_rounded),
                       onSelected: (action) {
-                        if (action == 'clear') {
+                        if (action == 'revisions') {
+                          _showRevisionHistoryModal(context, drawing);
+                        } else if (action == 'compare') {
+                          context.push('/drawings/${drawing.id}/compare', extra: drawing);
+                        } else if (action == 'clear') {
                           _confirmClearPage(context, markupController);
                         } else if (action == 'print') {
                           if (fileExists) {
@@ -513,6 +520,26 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                         }
                       },
                       itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'revisions',
+                          child: Row(
+                            children: [
+                              Icon(Icons.history_edu_rounded, size: 18, color: AppColors.safetyOrange),
+                              SizedBox(width: 8),
+                              Text('Revision Control (Rev 00-03)'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'compare',
+                          child: Row(
+                            children: [
+                              Icon(Icons.compare_rounded, size: 18, color: Colors.cyanAccent),
+                              SizedBox(width: 8),
+                              Text('Compare Drawing Revisions'),
+                            ],
+                          ),
+                        ),
                         const PopupMenuItem(
                           value: 'inspector',
                           child: Row(
@@ -843,4 +870,136 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
       },
     );
   }
+
+  void _showRevisionHistoryModal(BuildContext context, Drawing drawing) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.darkSurface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Consumer(
+          builder: (context, ref, child) {
+            final revisionsAsync = ref.watch(drawingRevisionsProvider(drawing.id));
+
+            return Container(
+              padding: const EdgeInsets.all(20),
+              height: MediaQuery.of(context).size.height * 0.65,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.history_edu_rounded, color: AppColors.safetyOrange),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Engineering Revision History (${drawing.drawingNumber})',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                        ],
+                      ),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                        ),
+                        icon: const Icon(Icons.compare_rounded, size: 16),
+                        label: const Text('Compare Revisions'),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          context.push('/drawings/${drawing.id}/compare', extra: drawing);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Immutable document revision register. Historical revisions are never overwritten.',
+                    style: TextStyle(color: AppColors.darkTextMuted, fontSize: 12),
+                  ),
+                  const Divider(color: Colors.white12, height: 24),
+                  Expanded(
+                    child: revisionsAsync.when(
+                      data: (revisions) {
+                        return ListView.separated(
+                          itemCount: revisions.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          itemBuilder: (context, index) {
+                            final rev = revisions[index];
+                            final isCurrent = rev.revisionNumber == drawing.revision;
+
+                            return Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isCurrent ? AppColors.safetyOrange.withOpacity(0.12) : AppColors.darkSurfaceVariant,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isCurrent ? AppColors.safetyOrange : Colors.white10,
+                                  width: isCurrent ? 1.5 : 1.0,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: isCurrent ? AppColors.safetyOrange : Colors.grey.shade800,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      rev.revisionNumber,
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          rev.revisionDescription,
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Uploaded by ${rev.uploadedBy} • Status: ${rev.status.displayName}',
+                                          style: const TextStyle(color: AppColors.darkTextMuted, fontSize: 11),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (isCurrent)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: Colors.greenAccent),
+                                      ),
+                                      child: const Text('ACTIVE', style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
+                      loading: () => const Center(child: CircularProgressIndicator()),
+                      error: (e, _) => Center(child: Text('Error: $e')),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 }
+

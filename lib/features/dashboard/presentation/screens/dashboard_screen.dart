@@ -9,6 +9,7 @@ import '../../../projects/presentation/controllers/projects_controller.dart';
 import '../../../drawings/presentation/controllers/drawings_controller.dart';
 import '../../../../shared/widgets/loading_state_view.dart';
 import '../../../../shared/widgets/error_state_view.dart';
+import '../../../../shared/widgets/status_badge.dart';
 import '../../../drawings/presentation/widgets/drawing_import_modal.dart';
 
 class DashboardScreen extends ConsumerWidget {

@@ -75,6 +75,7 @@ class _InspectionsScreenState extends ConsumerState<InspectionsScreen> {
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
+          builder: (context, setDlgState) {
             return AlertDialog(
               title: const Row(
                 children: [

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../controllers/settings_controller.dart';
 import '../../../../core/theme/color_palette.dart';
 import '../../../../core/providers/core_providers.dart';
 import '../../../../core/utils/sample_data_seeder.dart';
+import '../../../../core/security/rbac_manager.dart';
+import '../../../../core/security/secure_storage_service.dart';
+import '../../../../core/security/audit_logger.dart';
 import '../../../projects/presentation/controllers/projects_controller.dart';
 import '../../../drawings/presentation/controllers/drawings_controller.dart';
 import '../../../offline_manager/presentation/controllers/offline_controller.dart';
@@ -331,6 +335,112 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             const SizedBox(height: 20),
 
+            // Phase 7: Role-Based Access Control (RBAC) & Field Security
+            Container(
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.darkBorder.withOpacity(0.5)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.security_rounded, color: Colors.greenAccent, size: 22),
+                      SizedBox(width: 10),
+                      Text(
+                        'Role-Based Access Control & Security Governance',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Active session role dictates permissions for revision uploads, markups, inspection sign-offs, and cloud synchronization.',
+                    style: TextStyle(color: AppColors.darkTextMuted, fontSize: 12),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Role selector
+                  StatefulBuilder(
+                    builder: (context, setSecState) {
+                      final sec = SecureStorageService();
+                      final currentRole = sec.currentUser.role;
+
+                      return Column(
+                        children: UserRole.values.map((role) {
+                          final isSelected = currentRole == role;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.safetyOrange.withOpacity(0.12) : AppColors.darkSurfaceVariant,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isSelected ? AppColors.safetyOrange : Colors.white10,
+                              ),
+                            ),
+                            child: RadioListTile<UserRole>(
+                              value: role,
+                              groupValue: currentRole,
+                              title: Text(role.displayName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              subtitle: Text(
+                                'Approve Revisions: ${role.canApproveRevisions ? "YES" : "NO"} • Inspections: ${role.canPerformInspections ? "YES" : "NO"} • Sign-Offs: ${role.canSignInspection ? "YES" : "NO"}',
+                                style: const TextStyle(fontSize: 11, color: AppColors.darkTextMuted),
+                              ),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  sec.switchUserRole(val);
+                                  setSecState(() {});
+                                  AuditLogger().log(
+                                    action: 'ROLE_SWITCH',
+                                    entityType: 'SECURITY',
+                                    details: 'Switched session role to ${val.displayName}',
+                                  );
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Switched role to ${val.displayName}')),
+                                  );
+                                }
+                              },
+                            ),
+                          );
+                        }).toList(),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 12),
+                  // Audit Log Inspector Trigger
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.verified_user_rounded, color: Colors.greenAccent, size: 18),
+                          SizedBox(width: 8),
+                          Text(
+                            'Local AES-256 Storage: ENCRYPTED & ACTIVE',
+                            style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w600, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueGrey.shade800,
+                          foregroundColor: Colors.white,
+                        ),
+                        icon: const Icon(Icons.history_toggle_off, size: 16),
+                        label: const Text('View Field Audit Logs'),
+                        onPressed: () => _showAuditLogViewer(context),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
             // Development & Field Reset Tools
             Container(
               padding: const EdgeInsets.all(22),
@@ -428,4 +538,94 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       },
     );
   }
+
+  void _showAuditLogViewer(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.darkSurface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return FutureBuilder<List<AuditLogEntry>>(
+          future: AuditLogger().getRecentLogs(),
+          builder: (context, snapshot) {
+            final logs = snapshot.data ?? [];
+            return Container(
+              padding: const EdgeInsets.all(20),
+              height: MediaQuery.of(context).size.height * 0.7,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.history_toggle_off, color: AppColors.safetyOrange),
+                      SizedBox(width: 8),
+                      Text('Engineering Field Audit Trail (ISO / IEC Compliant)',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text('Cryptographically recorded field actions, user stamps, IP, and revision mutations.',
+                      style: TextStyle(color: AppColors.darkTextMuted, fontSize: 12)),
+                  const Divider(color: Colors.white12, height: 24),
+                  Expanded(
+                    child: snapshot.connectionState == ConnectionState.waiting
+                        ? const Center(child: CircularProgressIndicator())
+                        : logs.isEmpty
+                            ? const Center(child: Text('No audit logs recorded yet.'))
+                            : ListView.separated(
+                                itemCount: logs.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                                itemBuilder: (context, index) {
+                                  final log = logs[index];
+                                  return Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.darkSurfaceVariant,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.white10),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.safetyOrange.withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(log.action,
+                                              style: const TextStyle(color: AppColors.safetyOrange, fontSize: 11, fontWeight: FontWeight.bold)),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text('${log.userEmail} (${log.userRole})',
+                                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                                              const SizedBox(height: 2),
+                                              Text(log.details,
+                                                  style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                                            ],
+                                          ),
+                                        ),
+                                        Text(DateFormat('HH:mm:ss').format(log.createdAt),
+                                            style: const TextStyle(color: AppColors.darkTextMuted, fontSize: 11)),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 }
+

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/color_palette.dart';
 import 'offline_status_badge.dart';
+import '../../features/sync/presentation/widgets/sync_status_badge.dart';
 import '../../features/settings/presentation/controllers/settings_controller.dart';
 import '../../core/offline/offline_sync_manager.dart';
 import '../../core/offline/network_status_state.dart';
@@ -29,12 +30,13 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
     if (path.startsWith('/issues')) return 3;
     if (path.startsWith('/inspections')) return 4;
     if (path.startsWith('/equipment')) return 5;
-    if (path.startsWith('/calculations')) return 6;
-    if (path.startsWith('/takeoff')) return 7;
-    if (path.startsWith('/offline-downloads')) return 8;
-    if (path.startsWith('/offline-data')) return 9;
-    if (path.startsWith('/reports')) return 10;
-    if (path.startsWith('/settings')) return 11;
+    if (path.startsWith('/sync')) return 6;
+    if (path.startsWith('/calculations')) return 7;
+    if (path.startsWith('/takeoff')) return 8;
+    if (path.startsWith('/offline-downloads')) return 9;
+    if (path.startsWith('/offline-data')) return 10;
+    if (path.startsWith('/reports')) return 11;
+    if (path.startsWith('/settings')) return 12;
     return 0;
   }
 
@@ -59,21 +61,24 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
         context.go('/equipment');
         break;
       case 6:
-        context.go('/calculations');
+        context.go('/sync');
         break;
       case 7:
-        context.go('/takeoff');
+        context.go('/calculations');
         break;
       case 8:
-        context.go('/offline-downloads');
+        context.go('/takeoff');
         break;
       case 9:
-        context.go('/offline-data');
+        context.go('/offline-downloads');
         break;
       case 10:
-        context.go('/reports');
+        context.go('/offline-data');
         break;
       case 11:
+        context.go('/reports');
+        break;
+      case 12:
         context.go('/settings');
         break;
     }
@@ -208,45 +213,51 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
                       ),
 
                       const SizedBox(height: 8),
-                      _buildSectionHeader('ENGINEERING TOOLS'),
+                      _buildSectionHeader('OFFLINE & SYNC (PHASE 5)'),
                       _buildNavItem(
                         index: 6,
                         selectedIndex: selectedIndex,
-                        icon: Icons.calculate_rounded,
-                        label: 'Calculators',
+                        icon: Icons.sync_alt_rounded,
+                        label: 'Sync Center',
                       ),
                       _buildNavItem(
-                        index: 7,
-                        selectedIndex: selectedIndex,
-                        icon: Icons.table_chart_rounded,
-                        label: 'Material Takeoff (MTO)',
-                      ),
-
-                      const SizedBox(height: 8),
-                      _buildSectionHeader('OFFLINE & SYNC'),
-                      _buildNavItem(
-                        index: 8,
+                        index: 9,
                         selectedIndex: selectedIndex,
                         icon: Icons.download_for_offline_rounded,
                         label: 'Download Manager',
                       ),
                       _buildNavItem(
-                        index: 9,
+                        index: 10,
                         selectedIndex: selectedIndex,
                         icon: Icons.storage_rounded,
                         label: 'Offline Data & Cache',
                       ),
                       _buildNavItem(
-                        index: 10,
+                        index: 11,
                         selectedIndex: selectedIndex,
                         icon: Icons.description_rounded,
                         label: 'Reports & Export',
                       ),
 
                       const SizedBox(height: 8),
+                      _buildSectionHeader('ENGINEERING TOOLS'),
+                      _buildNavItem(
+                        index: 7,
+                        selectedIndex: selectedIndex,
+                        icon: Icons.calculate_rounded,
+                        label: 'Calculators',
+                      ),
+                      _buildNavItem(
+                        index: 8,
+                        selectedIndex: selectedIndex,
+                        icon: Icons.table_chart_rounded,
+                        label: 'Material Takeoff (MTO)',
+                      ),
+
+                      const SizedBox(height: 8),
                       _buildSectionHeader('SYSTEM'),
                       _buildNavItem(
-                        index: 11,
+                        index: 12,
                         selectedIndex: selectedIndex,
                         icon: Icons.settings_rounded,
                         label: 'Settings',
@@ -343,6 +354,12 @@ class _TabletScaffoldState extends ConsumerState<TabletScaffold> {
                       // Breadcrumb or Page Header
                       _buildHeaderTitle(selectedIndex),
                       const Spacer(),
+
+                      // Phase 5: Production Sync State Badge
+                      SyncStatusBadge(
+                        onTap: () => context.go('/sync'),
+                      ),
+                      const SizedBox(width: 12),
 
                       // Network / Offline Indicator Pill
                       const OfflineStatusBadge(),

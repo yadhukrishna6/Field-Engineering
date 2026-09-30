@@ -1,4 +1,5 @@
 class DatabaseTables {
+  // Core Tables
   static const String projects = 'projects';
   static const String drawings = 'drawings';
   static const String downloadQueue = 'download_queue';
@@ -16,10 +17,18 @@ class DatabaseTables {
   static const String inspectionItems = 'inspection_items';
   static const String equipment = 'equipment';
 
+  // Phase 5 Tables: Sync, Revisions, Audit & Conflicts
+  static const String syncQueue = 'sync_queue';
+  static const String revisions = 'revisions';
+  static const String auditLogs = 'audit_logs';
+  static const String conflicts = 'conflicts';
+
   // Common Columns
   static const String colId = 'id';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
+  static const String colVersion = 'version';
+  static const String colUpdatedBy = 'updated_by';
 
   // Projects Columns
   static const String colProjectNumber = 'project_number';
@@ -62,7 +71,7 @@ class DatabaseTables {
   static const String colPoint2Y = 'point2_y';
   static const String colKnownDistance = 'known_distance';
   static const String colScaleUnit = 'unit';
-  static const String colScaleFactor = 'scale_factor'; // real units per normalized distance
+  static const String colScaleFactor = 'scale_factor';
 
   // Measurements Columns
   static const String colMeasurementType = 'type';
@@ -132,4 +141,33 @@ class DatabaseTables {
   static const String colEquipmentNumber = 'equipment_number';
   static const String colTagNumber = 'tag_number';
   static const String colPhotoPath = 'photo_path';
+
+  // Phase 5: Sync Queue Columns
+  static const String colEntityType = 'entity_type';
+  static const String colEntityId = 'entity_id';
+  static const String colOperation = 'operation'; // CREATE, UPDATE, DELETE, UPLOAD_FILE
+  static const String colPayloadJson = 'payload_json';
+  static const String colRetryCount = 'retry_count';
+  static const String colSyncStatus = 'sync_status'; // pending, syncing, synced, failed
+
+  // Phase 5: Drawing Revisions Columns
+  static const String colRevisionNumber = 'revision_number'; // Rev 00, Rev 01, Rev 02, Rev 03
+  static const String colRevisionDescription = 'revision_description';
+  static const String colUploadedBy = 'uploaded_by';
+  static const String colUploadedAt = 'uploaded_at';
+  static const String colRevisionStatus = 'revision_status'; // Draft, Approved, Superseded, As-Built, Void
+
+  // Phase 5: Audit Logs Columns
+  static const String colAction = 'action';
+  static const String colUserEmail = 'user_email';
+  static const String colUserRole = 'user_role';
+  static const String colDetails = 'details';
+  static const String colIpAddress = 'ip_address';
+
+  // Phase 5: Conflicts Columns
+  static const String colLocalPayloadJson = 'local_payload_json';
+  static const String colServerPayloadJson = 'server_payload_json';
+  static const String colLocalVersion = 'local_version';
+  static const String colServerVersion = 'server_version';
+  static const String colResolutionStatus = 'resolution_status'; // pending, resolved_local, resolved_server, resolved_merge
 }

@@ -43,7 +43,7 @@ class AppDatabase {
 
       return await openDatabase(
         dbPath,
-        version: 3,
+        version: 4,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
       );
@@ -65,6 +65,8 @@ class AppDatabase {
         ${DatabaseTables.colClient} TEXT NOT NULL,
         ${DatabaseTables.colLocation} TEXT NOT NULL,
         ${DatabaseTables.colStatus} TEXT NOT NULL,
+        ${DatabaseTables.colVersion} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colUpdatedBy} TEXT,
         ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
         ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
       )
@@ -84,6 +86,8 @@ class AppDatabase {
         ${DatabaseTables.colPageCount} INTEGER NOT NULL DEFAULT 1,
         ${DatabaseTables.colFileSize} INTEGER NOT NULL DEFAULT 0,
         ${DatabaseTables.colDownloaded} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colVersion} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colUpdatedBy} TEXT,
         ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
         ${DatabaseTables.colUpdatedAt} TEXT NOT NULL,
         FOREIGN KEY (${DatabaseTables.colProjectId}) REFERENCES ${DatabaseTables.projects}(${DatabaseTables.colId}) ON DELETE CASCADE
@@ -120,6 +124,8 @@ class AppDatabase {
         ${DatabaseTables.colText} TEXT,
         ${DatabaseTables.colMetadata} TEXT,
         ${DatabaseTables.colCreatedBy} TEXT NOT NULL,
+        ${DatabaseTables.colVersion} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colUpdatedBy} TEXT,
         ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
         ${DatabaseTables.colUpdatedAt} TEXT NOT NULL,
         FOREIGN KEY (${DatabaseTables.colDrawingId}) REFERENCES ${DatabaseTables.drawings}(${DatabaseTables.colId}) ON DELETE CASCADE
@@ -159,6 +165,8 @@ class AppDatabase {
         ${DatabaseTables.colLabel} TEXT,
         ${DatabaseTables.colColor} INTEGER,
         ${DatabaseTables.colMetadata} TEXT,
+        ${DatabaseTables.colVersion} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colUpdatedBy} TEXT,
         ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
         FOREIGN KEY (${DatabaseTables.colDrawingId}) REFERENCES ${DatabaseTables.drawings}(${DatabaseTables.colId}) ON DELETE CASCADE
       )
@@ -181,6 +189,8 @@ class AppDatabase {
         ${DatabaseTables.colUnitCost} REAL DEFAULT 0.0,
         ${DatabaseTables.colNotes} TEXT,
         ${DatabaseTables.colLinkedCountTag} TEXT,
+        ${DatabaseTables.colVersion} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colUpdatedBy} TEXT,
         ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
         ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
       )
@@ -223,6 +233,8 @@ class AppDatabase {
         ${DatabaseTables.colLatitude} REAL,
         ${DatabaseTables.colLongitude} REAL,
         ${DatabaseTables.colGpsAccuracy} REAL,
+        ${DatabaseTables.colVersion} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colUpdatedBy} TEXT,
         ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
         ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
       )
@@ -287,6 +299,8 @@ class AppDatabase {
         ${DatabaseTables.colSummaryNotes} TEXT,
         ${DatabaseTables.colLatitude} REAL,
         ${DatabaseTables.colLongitude} REAL,
+        ${DatabaseTables.colVersion} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colUpdatedBy} TEXT,
         ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
         ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
       )
@@ -323,6 +337,72 @@ class AppDatabase {
         ${DatabaseTables.colLatitude} REAL,
         ${DatabaseTables.colLongitude} REAL,
         ${DatabaseTables.colStatus} TEXT NOT NULL DEFAULT 'Operational',
+        ${DatabaseTables.colVersion} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colUpdatedBy} TEXT,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
+        ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    // 15. Phase 5: Sync Queue Table
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.syncQueue} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colEntityType} TEXT NOT NULL,
+        ${DatabaseTables.colEntityId} TEXT NOT NULL,
+        ${DatabaseTables.colOperation} TEXT NOT NULL,
+        ${DatabaseTables.colPayloadJson} TEXT,
+        ${DatabaseTables.colFilePath} TEXT,
+        ${DatabaseTables.colRetryCount} INTEGER NOT NULL DEFAULT 0,
+        ${DatabaseTables.colSyncStatus} TEXT NOT NULL DEFAULT 'pending',
+        ${DatabaseTables.colErrorMessage} TEXT,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
+        ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    // 16. Phase 5: Drawing Revisions Table
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.revisions} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colDrawingId} TEXT NOT NULL,
+        ${DatabaseTables.colRevisionNumber} TEXT NOT NULL,
+        ${DatabaseTables.colRevisionDescription} TEXT NOT NULL,
+        ${DatabaseTables.colUploadedBy} TEXT NOT NULL,
+        ${DatabaseTables.colUploadedAt} TEXT NOT NULL,
+        ${DatabaseTables.colFilePath} TEXT NOT NULL,
+        ${DatabaseTables.colRevisionStatus} TEXT NOT NULL DEFAULT 'Approved',
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
+        FOREIGN KEY (${DatabaseTables.colDrawingId}) REFERENCES ${DatabaseTables.drawings}(${DatabaseTables.colId}) ON DELETE CASCADE
+      )
+    ''');
+
+    // 17. Phase 5: Audit Logs Table
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.auditLogs} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colAction} TEXT NOT NULL,
+        ${DatabaseTables.colUserEmail} TEXT NOT NULL,
+        ${DatabaseTables.colUserRole} TEXT NOT NULL,
+        ${DatabaseTables.colEntityType} TEXT NOT NULL,
+        ${DatabaseTables.colEntityId} TEXT,
+        ${DatabaseTables.colDetails} TEXT,
+        ${DatabaseTables.colIpAddress} TEXT,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    // 18. Phase 5: Conflicts Table
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.conflicts} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colEntityType} TEXT NOT NULL,
+        ${DatabaseTables.colEntityId} TEXT NOT NULL,
+        ${DatabaseTables.colLocalPayloadJson} TEXT NOT NULL,
+        ${DatabaseTables.colServerPayloadJson} TEXT NOT NULL,
+        ${DatabaseTables.colLocalVersion} INTEGER NOT NULL,
+        ${DatabaseTables.colServerVersion} INTEGER NOT NULL,
+        ${DatabaseTables.colResolutionStatus} TEXT NOT NULL DEFAULT 'pending',
         ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
         ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
       )
@@ -347,12 +427,16 @@ class AppDatabase {
     batch.execute('CREATE INDEX IF NOT EXISTS idx_inspections_project ON ${DatabaseTables.inspections}(${DatabaseTables.colProjectId});');
     batch.execute('CREATE INDEX IF NOT EXISTS idx_inspection_items_inspection ON ${DatabaseTables.inspectionItems}(${DatabaseTables.colInspectionId});');
     batch.execute('CREATE INDEX IF NOT EXISTS idx_equipment_project ON ${DatabaseTables.equipment}(${DatabaseTables.colProjectId});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON ${DatabaseTables.syncQueue}(${DatabaseTables.colSyncStatus});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_revisions_drawing ON ${DatabaseTables.revisions}(${DatabaseTables.colDrawingId});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON ${DatabaseTables.auditLogs}(${DatabaseTables.colCreatedAt});');
+    batch.execute('CREATE INDEX IF NOT EXISTS idx_conflicts_status ON ${DatabaseTables.conflicts}(${DatabaseTables.colResolutionStatus});');
 
     await batch.commit(noResult: true);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Ensure all Phase 3 and Phase 4 tables are created if migrating from earlier versions
+    // Phase 4 Tables Check
     await db.execute('''
       CREATE TABLE IF NOT EXISTS ${DatabaseTables.issues} (
         ${DatabaseTables.colId} TEXT PRIMARY KEY,
@@ -374,6 +458,8 @@ class AppDatabase {
         ${DatabaseTables.colLatitude} REAL,
         ${DatabaseTables.colLongitude} REAL,
         ${DatabaseTables.colGpsAccuracy} REAL,
+        ${DatabaseTables.colVersion} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colUpdatedBy} TEXT,
         ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
         ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
       )
@@ -435,6 +521,8 @@ class AppDatabase {
         ${DatabaseTables.colSummaryNotes} TEXT,
         ${DatabaseTables.colLatitude} REAL,
         ${DatabaseTables.colLongitude} REAL,
+        ${DatabaseTables.colVersion} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colUpdatedBy} TEXT,
         ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
         ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
       )
@@ -469,6 +557,68 @@ class AppDatabase {
         ${DatabaseTables.colLatitude} REAL,
         ${DatabaseTables.colLongitude} REAL,
         ${DatabaseTables.colStatus} TEXT NOT NULL DEFAULT 'Operational',
+        ${DatabaseTables.colVersion} INTEGER NOT NULL DEFAULT 1,
+        ${DatabaseTables.colUpdatedBy} TEXT,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
+        ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    // Phase 5: Tables
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.syncQueue} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colEntityType} TEXT NOT NULL,
+        ${DatabaseTables.colEntityId} TEXT NOT NULL,
+        ${DatabaseTables.colOperation} TEXT NOT NULL,
+        ${DatabaseTables.colPayloadJson} TEXT,
+        ${DatabaseTables.colFilePath} TEXT,
+        ${DatabaseTables.colRetryCount} INTEGER NOT NULL DEFAULT 0,
+        ${DatabaseTables.colSyncStatus} TEXT NOT NULL DEFAULT 'pending',
+        ${DatabaseTables.colErrorMessage} TEXT,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
+        ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.revisions} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colDrawingId} TEXT NOT NULL,
+        ${DatabaseTables.colRevisionNumber} TEXT NOT NULL,
+        ${DatabaseTables.colRevisionDescription} TEXT NOT NULL,
+        ${DatabaseTables.colUploadedBy} TEXT NOT NULL,
+        ${DatabaseTables.colUploadedAt} TEXT NOT NULL,
+        ${DatabaseTables.colFilePath} TEXT NOT NULL,
+        ${DatabaseTables.colRevisionStatus} TEXT NOT NULL DEFAULT 'Approved',
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.auditLogs} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colAction} TEXT NOT NULL,
+        ${DatabaseTables.colUserEmail} TEXT NOT NULL,
+        ${DatabaseTables.colUserRole} TEXT NOT NULL,
+        ${DatabaseTables.colEntityType} TEXT NOT NULL,
+        ${DatabaseTables.colEntityId} TEXT,
+        ${DatabaseTables.colDetails} TEXT,
+        ${DatabaseTables.colIpAddress} TEXT,
+        ${DatabaseTables.colCreatedAt} TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${DatabaseTables.conflicts} (
+        ${DatabaseTables.colId} TEXT PRIMARY KEY,
+        ${DatabaseTables.colEntityType} TEXT NOT NULL,
+        ${DatabaseTables.colEntityId} TEXT NOT NULL,
+        ${DatabaseTables.colLocalPayloadJson} TEXT NOT NULL,
+        ${DatabaseTables.colServerPayloadJson} TEXT NOT NULL,
+        ${DatabaseTables.colLocalVersion} INTEGER NOT NULL,
+        ${DatabaseTables.colServerVersion} INTEGER NOT NULL,
+        ${DatabaseTables.colResolutionStatus} TEXT NOT NULL DEFAULT 'pending',
         ${DatabaseTables.colCreatedAt} TEXT NOT NULL,
         ${DatabaseTables.colUpdatedAt} TEXT NOT NULL
       )
