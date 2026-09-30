@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' hide DatabaseException;
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'database_tables.dart';
@@ -20,9 +21,16 @@ class AppDatabase {
 
   Future<Database> _initDatabase() async {
     try {
-      if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      final DatabaseFactory factory;
+      if (kIsWeb) {
+        databaseFactory = databaseFactoryFfiWeb;
+        factory = databaseFactoryFfiWeb;
+      } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
         sqfliteFfiInit();
         databaseFactory = databaseFactoryFfi;
+        factory = databaseFactoryFfi;
+      } else {
+        factory = databaseFactory;
       }
 
       String dbPath;
@@ -41,11 +49,13 @@ class AppDatabase {
         dbPath = p.join(appDocDir.path, 'field_engineering_v1.db');
       }
 
-      return await openDatabase(
+      return await factory.openDatabase(
         dbPath,
-        version: 4,
-        onCreate: _onCreate,
-        onUpgrade: _onUpgrade,
+        options: OpenDatabaseOptions(
+          version: 4,
+          onCreate: _onCreate,
+          onUpgrade: _onUpgrade,
+        ),
       );
     } catch (e, st) {
       throw DatabaseException('Failed to initialize local SQLite database: $e', details: st);

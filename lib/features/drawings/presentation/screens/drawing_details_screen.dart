@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -440,8 +441,7 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
 
         final viewerState = ref.watch(markupControllerProvider(drawing.id));
         final markupController = ref.read(markupControllerProvider(drawing.id).notifier);
-        final file = File(drawing.filePath);
-        final fileExists = file.existsSync();
+        final fileExists = !kIsWeb && File(drawing.filePath).existsSync();
 
         return Scaffold(
           backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
@@ -658,8 +658,8 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                         } else if (action == 'clear') {
                           _confirmClearPage(context, markupController);
                         } else if (action == 'print') {
-                          if (fileExists) {
-                            file.readAsBytes().then((bytes) {
+                          if (!kIsWeb && File(drawing.filePath).existsSync()) {
+                            File(drawing.filePath).readAsBytes().then((bytes) {
                               Printing.layoutPdf(onLayout: (format) => bytes, name: '${drawing.drawingNumber}.pdf');
                             });
                           }
