@@ -95,7 +95,6 @@ class _DrawingCanvasViewState extends State<DrawingCanvasView> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fileExists = !kIsWeb && File(widget.drawing.filePath).existsSync();
 
     return Stack(
       children: [
@@ -133,31 +132,9 @@ class _DrawingCanvasViewState extends State<DrawingCanvasView> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        // Layer 1: Base PDF Document (Vector Blueprint)
+                        // Layer 1: Base Document (PDF Blueprint or High-Resolution Site Image)
                         if (widget.viewerState.visibleLayers.contains(DrawingLayer.original))
-                          PdfPreview(
-                            build: (format) async {
-                              if (!kIsWeb && fileExists) {
-                                return await File(widget.drawing.filePath).readAsBytes();
-                              } else {
-                                // Fast web bundle / fallback loading
-                                try {
-                                  final bd = await rootBundle.load('assets/sample_drawings/pid_drawing_sample.pdf');
-                                  return bd.buffer.asUint8List();
-                                } catch (_) {
-                                  return Uint8List(0);
-                                }
-                              }
-                            },
-                            useActions: false,
-                            canChangeOrientation: false,
-                            canChangePageFormat: false,
-                            canDebug: false,
-                            dynamicLayout: false,
-                            maxPageWidth: 1600,
-                            loadingWidget: const LoadingStateView(message: 'Loading blueprint...'),
-                            pdfFileName: '${widget.drawing.drawingNumber}.pdf',
-                          ),
+                          _buildBaseDocumentLayer(context, isDark),
 
                         // Layer 2: Custom Markup & Annotation Layer
                         LayoutBuilder(
@@ -212,6 +189,102 @@ class _DrawingCanvasViewState extends State<DrawingCanvasView> {
             ),
           ),
       ],
+    );
+  }
+
+  bool _isImageFile(String path) {
+    final p = path.toLowerCase();
+    return p.endsWith('.png') ||
+        p.endsWith('.jpg') ||
+        p.endsWith('.jpeg') ||
+        p.endsWith('.webp') ||
+        p.endsWith('.bmp') ||
+        p.endsWith('.gif') ||
+        p.endsWith('.tif') ||
+        p.endsWith('.tiff') ||
+        p.contains('image_picker') ||
+        p.startsWith('data:image');
+  }
+
+  Widget _buildBaseDocumentLayer(BuildContext context, bool isDark) {
+    final filePath = widget.drawing.filePath;
+
+    if (_isImageFile(filePath)) {
+      if (filePath.startsWith('assets/')) {
+        return Image.asset(
+          filePath,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => _buildFallbackVectorCanvas(isDark),
+        );
+      } else if (!kIsWeb && File(filePath).existsSync()) {
+        return Image.file(
+          File(filePath),
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => _buildFallbackVectorCanvas(isDark),
+        );
+      } else {
+        return Image.network(
+          filePath,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => _buildFallbackVectorCanvas(isDark),
+        );
+      }
+    }
+
+    // Default: PDF Document Preview
+    final fileExists = !kIsWeb && File(filePath).existsSync();
+    return PdfPreview(
+      build: (format) async {
+        if (!kIsWeb && fileExists) {
+          return await File(filePath).readAsBytes();
+        } else {
+          try {
+            final bd = await rootBundle.load('assets/sample_drawings/pid_drawing_sample.pdf');
+            return bd.buffer.asUint8List();
+          } catch (_) {
+            return Uint8List(0);
+          }
+        }
+      },
+      useActions: false,
+      canChangeOrientation: false,
+      canChangePageFormat: false,
+      canDebug: false,
+      dynamicLayout: false,
+      maxPageWidth: 1600,
+      loadingWidget: const LoadingStateView(message: 'Loading blueprint document...'),
+      pdfFileName: '${widget.drawing.drawingNumber}.pdf',
+    );
+  }
+
+  Widget _buildFallbackVectorCanvas(bool isDark) {
+    return Container(
+      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.architecture_rounded, size: 64, color: AppColors.safetyOrange.withOpacity(0.6)),
+            const SizedBox(height: 12),
+            Text(
+              widget.drawing.title,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${widget.drawing.drawingNumber} • ${widget.drawing.revision}',
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.white38 : Colors.black45,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

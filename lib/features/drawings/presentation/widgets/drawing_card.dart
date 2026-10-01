@@ -101,7 +101,7 @@ class DrawingCard extends ConsumerWidget {
                               children: [
                                 Icon(Icons.visibility_rounded, size: 18, color: AppColors.primaryLight),
                                 SizedBox(width: 8),
-                                Text('Open in Vector Viewer'),
+                                Text('Open Blueprint / Drawing'),
                               ],
                             ),
                           ),
@@ -206,7 +206,7 @@ class DrawingCard extends ConsumerWidget {
                   else
                     IconButton(
                       icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                      tooltip: 'Inspect PDF',
+                      tooltip: 'Open Drawing',
                       color: AppColors.primaryLight,
                       onPressed: () => context.go('/drawings/${drawing.id}/view'),
                     ),

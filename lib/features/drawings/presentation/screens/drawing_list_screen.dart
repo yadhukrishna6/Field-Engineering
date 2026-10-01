@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -74,8 +76,8 @@ class _DrawingListScreenState extends ConsumerState<DrawingListScreen> with Sing
             onPressed: () {},
           ),
           IconButton(
-            icon: const Icon(Icons.add_to_photos_rounded, color: Color(0xFF2563EB)),
-            tooltip: 'Import PDF Drawing',
+            icon: const Icon(Icons.add_photo_alternate_rounded, color: Color(0xFF2563EB)),
+            tooltip: 'Upload Blueprint (PDF & Image)',
             onPressed: () {
               showModalBottomSheet(
                 context: context,
@@ -245,6 +247,16 @@ class _DrawingListScreenState extends ConsumerState<DrawingListScreen> with Sing
   Widget _buildDrawingCard(BuildContext context, bool isDark, Drawing drawing) {
     final sizeMb = (drawing.fileSize / (1024 * 1024)).toStringAsFixed(1);
     final isDownloaded = drawing.downloaded;
+    final filePath = drawing.filePath.toLowerCase();
+    final isImage = filePath.endsWith('.png') ||
+        filePath.endsWith('.jpg') ||
+        filePath.endsWith('.jpeg') ||
+        filePath.endsWith('.webp') ||
+        filePath.endsWith('.bmp') ||
+        filePath.endsWith('.tif') ||
+        filePath.endsWith('.tiff');
+    final formatLabel = isImage ? 'IMAGE' : 'PDF';
+    final hasLocalImage = isImage && !kIsWeb && File(drawing.filePath).existsSync();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -272,6 +284,7 @@ class _DrawingListScreenState extends ConsumerState<DrawingListScreen> with Sing
               Container(
                 width: 68,
                 height: 68,
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(10),
@@ -279,13 +292,25 @@ class _DrawingListScreenState extends ConsumerState<DrawingListScreen> with Sing
                     color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
                   ),
                 ),
-                child: Center(
-                  child: Icon(
-                    drawing.drawingType.icon,
-                    color: const Color(0xFF2563EB),
-                    size: 32,
-                  ),
-                ),
+                child: hasLocalImage
+                    ? Image.file(
+                        File(drawing.filePath),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Center(
+                          child: Icon(
+                            drawing.drawingType.icon,
+                            color: const Color(0xFF2563EB),
+                            size: 32,
+                          ),
+                        ),
+                      )
+                    : Center(
+                        child: Icon(
+                          isImage ? Icons.image_rounded : drawing.drawingType.icon,
+                          color: const Color(0xFF2563EB),
+                          size: 32,
+                        ),
+                      ),
               ),
               const SizedBox(width: 14),
 
@@ -306,7 +331,7 @@ class _DrawingListScreenState extends ConsumerState<DrawingListScreen> with Sing
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${drawing.revision}  |  PDF  |  $sizeMb MB',
+                      '${drawing.revision}  |  $formatLabel  |  $sizeMb MB',
                       style: TextStyle(
                         fontSize: 12,
                         color: isDark ? Colors.white54 : Colors.black54,
