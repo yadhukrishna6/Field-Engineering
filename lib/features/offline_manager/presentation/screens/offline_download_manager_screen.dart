@@ -9,6 +9,7 @@ import '../../../../core/offline/network_status_state.dart';
 import '../../../../core/theme/color_palette.dart';
 import '../../../../shared/widgets/loading_state_view.dart';
 import '../../../../shared/widgets/status_badge.dart';
+import '../../../../shared/widgets/app_header_bar.dart';
 
 class OfflineDownloadManagerScreen extends ConsumerWidget {
   const OfflineDownloadManagerScreen({super.key});
@@ -26,7 +27,11 @@ class OfflineDownloadManagerScreen extends ConsumerWidget {
     final downloadedDrawings = projectsState.projects.fold<int>(0, (sum, p) => sum + p.downloadedCount);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+      appBar: const AppHeaderBar(
+        title: 'Offline Download Manager',
+        subtitle: 'Desert & Remote Field Pre-Caching',
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(

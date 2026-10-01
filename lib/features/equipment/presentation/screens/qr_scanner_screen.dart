@@ -79,6 +79,16 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> with SingleTi
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/dashboard');
+            }
+          },
+        ),
         title: Row(
           children: [
             const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary),

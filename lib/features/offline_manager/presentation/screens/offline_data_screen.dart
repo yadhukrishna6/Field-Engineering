@@ -7,6 +7,7 @@ import '../../../../core/storage/storage_models.dart';
 import '../../../../core/offline/offline_sync_manager.dart';
 import '../../../../core/theme/color_palette.dart';
 import '../../../../shared/widgets/loading_state_view.dart';
+import '../../../../shared/widgets/app_header_bar.dart';
 import '../../../../core/utils/formatters.dart';
 
 class OfflineDataScreen extends ConsumerWidget {
@@ -19,7 +20,11 @@ class OfflineDataScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+      appBar: const AppHeaderBar(
+        title: 'Offline Storage & Local Cache Inspector',
+        subtitle: 'SQLite Database & Cached Blueprints',
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(

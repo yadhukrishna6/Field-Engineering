@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../../../../core/theme/color_palette.dart';
 import '../../../../core/providers/core_providers.dart';
 import '../../../../core/services/field_gps_service.dart';
+import '../../../../shared/widgets/app_header_bar.dart';
 import '../../domain/models/equipment_item.dart';
 import '../../../projects/domain/models/project.dart';
 import '../../../drawings/domain/models/drawing.dart';
@@ -256,6 +257,10 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> {
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+      appBar: const AppHeaderBar(
+        title: 'Equipment Master & Registry',
+        subtitle: 'Tag Tracking & Field P&ID Linking',
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -54,6 +55,7 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
   String _searchFilterQuery = '';
   String? _selectedFilterLayer;
   String? _selectedFilterDiscipline;
+  Timer? _autosaveDebounceTimer;
 
   @override
   void initState() {
@@ -63,24 +65,29 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
 
   @override
   void dispose() {
+    _autosaveDebounceTimer?.cancel();
     _transformationController.removeListener(_onCanvasTransformChanged);
     _transformationController.dispose();
     super.dispose();
   }
 
   void _onCanvasTransformChanged() {
-    final matrix = _transformationController.value;
-    final zoom = matrix.getMaxScaleOnAxis();
-    final translation = matrix.getTranslation();
+    _autosaveDebounceTimer?.cancel();
+    _autosaveDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      final matrix = _transformationController.value;
+      final zoom = matrix.getMaxScaleOnAxis();
+      final translation = matrix.getTranslation();
 
-    CrashRecoveryService().autosaveDrawingSession(
-      drawingId: widget.drawingId,
-      pageNumber: ref.read(markupControllerProvider(widget.drawingId)).currentPage,
-      zoomScale: zoom,
-      panOffsetX: translation.x,
-      panOffsetY: translation.y,
-      activeTool: ref.read(markupControllerProvider(widget.drawingId)).selectedTool?.name ?? 'select',
-    );
+      CrashRecoveryService().autosaveDrawingSession(
+        drawingId: widget.drawingId,
+        pageNumber: ref.read(markupControllerProvider(widget.drawingId)).currentPage,
+        zoomScale: zoom,
+        panOffsetX: translation.x,
+        panOffsetY: translation.y,
+        activeTool: ref.read(markupControllerProvider(widget.drawingId)).selectedTool?.name ?? 'select',
+      );
+    });
   }
 
   void _resetZoom() {

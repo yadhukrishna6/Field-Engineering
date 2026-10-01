@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/reliability/diagnostics_service.dart';
 
 class DiagnosticsScreen extends StatefulWidget {
@@ -61,6 +62,16 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       backgroundColor: const Color(0xFF0E121A),
       appBar: AppBar(
         backgroundColor: const Color(0xFF141923),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.cyanAccent),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/settings');
+            }
+          },
+        ),
         title: const Row(
           children: [
             Icon(Icons.monitor_heart_rounded, color: Colors.cyanAccent),

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/color_palette.dart';
 import '../../../../core/providers/core_providers.dart';
 import '../../../../core/services/field_gps_service.dart';
+import '../../../../shared/widgets/app_header_bar.dart';
 import '../../domain/models/inspection.dart';
 import '../../../projects/domain/models/project.dart';
 
@@ -185,6 +186,10 @@ class _InspectionsScreenState extends ConsumerState<InspectionsScreen> {
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+      appBar: const AppHeaderBar(
+        title: 'Field Inspections & QC',
+        subtitle: 'Checklists & QA Verification',
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(

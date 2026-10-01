@@ -28,76 +28,85 @@ class AppHeaderBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final iconColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final borderColor = isDark ? Colors.white10 : Colors.black12;
+
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        border: Border(bottom: BorderSide(color: Colors.white10, width: 1)),
+      decoration: BoxDecoration(
+        color: bgColor,
+        border: Border(bottom: BorderSide(color: borderColor, width: 1)),
       ),
-      child: Row(
-        children: [
-          if (showBack)
-            leading ??
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () {
-                      if (onBack != null) {
-                        onBack!();
-                      } else {
-                        if (context.canPop()) {
-                          context.pop();
+      child: SafeArea(
+        bottom: false,
+        child: Row(
+          children: [
+            if (showBack)
+              leading ??
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        if (onBack != null) {
+                          onBack!();
                         } else {
-                          context.go('/dashboard');
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go('/dashboard');
+                          }
                         }
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.arrow_back,
-                        color: Colors.white,
-                        size: 24,
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.arrow_back_rounded,
+                          color: iconColor,
+                          size: 24,
+                        ),
                       ),
                     ),
                   ),
-                ),
-          if (showBack) const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-                if (subtitle != null && subtitle!.isNotEmpty)
+            if (showBack) const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    subtitle!,
+                    title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.darkTextSecondary.withOpacity(0.8),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: textColor,
+                      letterSpacing: 0.2,
                     ),
                   ),
-              ],
+                  if (subtitle != null && subtitle!.isNotEmpty)
+                    Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? AppColors.darkTextSecondary.withOpacity(0.8) : Colors.black54,
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-          if (actions != null) ...actions!,
-        ],
+            if (actions != null) ...actions!,
+          ],
+        ),
       ),
     );
   }

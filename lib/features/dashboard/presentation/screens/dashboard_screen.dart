@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/theme/color_palette.dart';
 import '../../../settings/presentation/controllers/settings_controller.dart';
 
@@ -58,15 +59,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Widget _buildTopStatusBar(BuildContext context, dynamic settings) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final now = DateTime.now();
+    final timeStr = DateFormat('HH:mm').format(now);
+    final dateStr = DateFormat('EEE, d MMM').format(now);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Time & Date Indicator (like tablet status bar: 9:41, Tue, 30 Sep)
+        // Time & Date Indicator (Live localized tablet status bar)
         Row(
           children: [
             Text(
-              '9:41',
+              timeStr,
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
@@ -75,7 +79,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             const SizedBox(width: 8),
             Text(
-              'Tue, 30 Sep',
+              dateStr,
               style: TextStyle(
                 fontSize: 12,
                 color: isDark ? Colors.white60 : Colors.black54,
@@ -388,7 +392,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
         child: Padding(
-          padding: const EdgeInsets.all(14.0),
+          padding: const EdgeInsets.all(12.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -397,39 +401,42 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 38,
+                    height: 38,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: gradientColors,
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                       boxShadow: [
                         BoxShadow(
                           color: gradientColors[0].withOpacity(0.35),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
                         ),
                       ],
                     ),
-                    child: Icon(icon, color: Colors.white, size: 24),
+                    child: Icon(icon, color: Colors.white, size: 20),
                   ),
                   Icon(
                     Icons.arrow_forward_ios_rounded,
-                    size: 14,
+                    size: 12,
                     color: isDark ? Colors.white30 : Colors.black26,
                   ),
                 ],
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.w800,
                       color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
@@ -437,8 +444,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.w500,
                       color: isDark ? Colors.white54 : Colors.black54,
                     ),

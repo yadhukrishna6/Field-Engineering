@@ -8,6 +8,7 @@ import '../../../../core/utils/sample_data_seeder.dart';
 import '../../../../core/security/rbac_manager.dart';
 import '../../../../core/security/secure_storage_service.dart';
 import '../../../../core/security/audit_logger.dart';
+import '../../../../shared/widgets/app_header_bar.dart';
 import '../../../projects/presentation/controllers/projects_controller.dart';
 import '../../../drawings/presentation/controllers/drawings_controller.dart';
 import '../../../offline_manager/presentation/controllers/offline_controller.dart';
@@ -74,7 +75,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+      appBar: const AppHeaderBar(
+        title: 'Tablet Settings & Offline Configuration',
+        subtitle: 'Engineer Profile, PIN Security & Theme',
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(

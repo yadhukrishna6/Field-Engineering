@@ -6,6 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../../../core/theme/color_palette.dart';
 import '../../../../core/providers/core_providers.dart';
+import '../../../../shared/widgets/app_header_bar.dart';
 import '../../domain/models/issue.dart';
 import '../widgets/issue_dialog.dart';
 import '../../../projects/domain/models/project.dart';
@@ -229,6 +230,10 @@ class _IssuesScreenState extends ConsumerState<IssuesScreen> with SingleTickerPr
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+      appBar: const AppHeaderBar(
+        title: 'Field Issues & Punch List',
+        subtitle: 'Quality Non-Conformance & Snag Tracking',
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
