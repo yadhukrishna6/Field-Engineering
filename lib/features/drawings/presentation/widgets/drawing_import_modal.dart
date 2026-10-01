@@ -64,9 +64,13 @@ class _DrawingImportModalState extends ConsumerState<DrawingImportModal> {
         final isImg = ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'tif', 'tiff'].contains(extension);
 
         String computedPath;
-        if (kIsWeb && file.bytes != null) {
-          final mime = isImg ? (extension == 'jpg' ? 'image/jpeg' : 'image/$extension') : 'application/pdf';
-          computedPath = 'data:$mime;base64,${base64Encode(file.bytes!)}';
+        if (kIsWeb) {
+          if (file.bytes != null && file.bytes!.isNotEmpty) {
+            final mime = isImg ? (extension == 'jpg' ? 'image/jpeg' : 'image/$extension') : 'application/pdf';
+            computedPath = 'data:$mime;base64,${base64Encode(file.bytes!)}';
+          } else {
+            computedPath = file.name;
+          }
         } else {
           computedPath = file.path ?? file.name;
         }

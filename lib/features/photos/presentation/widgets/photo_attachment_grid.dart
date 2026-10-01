@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -47,12 +48,26 @@ class _PhotoAttachmentGridState extends State<PhotoAttachmentGrid> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
         allowMultiple: false,
+        withData: true,
       );
 
-      if (result != null && result.files.single.path != null) {
-        final filePath = result.files.single.path!;
-        final fileName = result.files.single.name;
-        final fileSize = result.files.single.size;
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.single;
+        final fileName = file.name;
+        final fileSize = file.size;
+        final extension = (file.extension ?? 'png').toLowerCase();
+
+        String filePath;
+        if (kIsWeb) {
+          if (file.bytes != null && file.bytes!.isNotEmpty) {
+            final mime = extension == 'jpg' ? 'image/jpeg' : 'image/$extension';
+            filePath = 'data:$mime;base64,${base64Encode(file.bytes!)}';
+          } else {
+            filePath = fileName;
+          }
+        } else {
+          filePath = file.path ?? fileName;
+        }
 
         // Capture current offline GPS coordinates
         final gps = await FieldGpsService.instance.getCurrentPosition();
@@ -257,6 +272,13 @@ class _PhotoAttachmentGridState extends State<PhotoAttachmentGrid> {
   }
 
   Widget _buildPhotoThumbnail(PhotoAttachment photo) {
+    if (photo.filePath.startsWith('data:image')) {
+      return Image.network(
+        photo.filePath,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildPlaceholder(photo),
+      );
+    }
     if (!kIsWeb && File(photo.filePath).existsSync()) {
       return Image.file(
         File(photo.filePath),
