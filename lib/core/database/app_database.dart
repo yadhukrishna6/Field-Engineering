@@ -23,8 +23,8 @@ class AppDatabase {
     try {
       final DatabaseFactory factory;
       if (kIsWeb) {
-        databaseFactory = databaseFactoryFfiWeb;
-        factory = databaseFactoryFfiWeb;
+        databaseFactory = databaseFactoryFfiWebNoWebWorker;
+        factory = databaseFactoryFfiWebNoWebWorker;
       } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
         sqfliteFfiInit();
         databaseFactory = databaseFactoryFfi;

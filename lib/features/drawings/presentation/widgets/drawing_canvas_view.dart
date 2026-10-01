@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
@@ -210,7 +211,24 @@ class _DrawingCanvasViewState extends State<DrawingCanvasView> {
     final filePath = widget.drawing.filePath;
 
     if (_isImageFile(filePath)) {
-      if (filePath.startsWith('assets/')) {
+      if (filePath.startsWith('data:image')) {
+        try {
+          final commaIndex = filePath.indexOf(',');
+          if (commaIndex != -1) {
+            final base64Data = filePath.substring(commaIndex + 1);
+            return Image.memory(
+              base64Decode(base64Data),
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => _buildFallbackVectorCanvas(isDark),
+            );
+          }
+        } catch (_) {}
+        return Image.network(
+          filePath,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => _buildFallbackVectorCanvas(isDark),
+        );
+      } else if (filePath.startsWith('assets/')) {
         return Image.asset(
           filePath,
           fit: BoxFit.contain,
@@ -235,7 +253,10 @@ class _DrawingCanvasViewState extends State<DrawingCanvasView> {
     final fileExists = !kIsWeb && File(filePath).existsSync();
     return PdfPreview(
       build: (format) async {
-        if (!kIsWeb && fileExists) {
+        if (filePath.startsWith('data:application/pdf;base64,')) {
+          final base64Data = filePath.substring('data:application/pdf;base64,'.length);
+          return base64Decode(base64Data);
+        } else if (!kIsWeb && fileExists) {
           return await File(filePath).readAsBytes();
         } else {
           try {

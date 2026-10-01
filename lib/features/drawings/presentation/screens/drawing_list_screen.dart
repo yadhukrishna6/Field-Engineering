@@ -292,25 +292,37 @@ class _DrawingListScreenState extends ConsumerState<DrawingListScreen> with Sing
                     color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
                   ),
                 ),
-                child: hasLocalImage
-                    ? Image.file(
-                        File(drawing.filePath),
+                child: isImage && drawing.filePath.startsWith('data:image')
+                    ? Image.network(
+                        drawing.filePath,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Center(
+                        errorBuilder: (_, __, ___) => const Center(
                           child: Icon(
-                            drawing.drawingType.icon,
-                            color: const Color(0xFF2563EB),
+                            Icons.image_rounded,
+                            color: Color(0xFF2563EB),
                             size: 32,
                           ),
                         ),
                       )
-                    : Center(
-                        child: Icon(
-                          isImage ? Icons.image_rounded : drawing.drawingType.icon,
-                          color: const Color(0xFF2563EB),
-                          size: 32,
-                        ),
-                      ),
+                    : (hasLocalImage
+                        ? Image.file(
+                            File(drawing.filePath),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Center(
+                              child: Icon(
+                                drawing.drawingType.icon,
+                                color: const Color(0xFF2563EB),
+                                size: 32,
+                              ),
+                            ),
+                          )
+                        : Center(
+                            child: Icon(
+                              isImage ? Icons.image_rounded : drawing.drawingType.icon,
+                              color: const Color(0xFF2563EB),
+                              size: 32,
+                            ),
+                          )),
               ),
               const SizedBox(width: 14),
 
