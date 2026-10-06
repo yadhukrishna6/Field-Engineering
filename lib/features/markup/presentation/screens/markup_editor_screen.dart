@@ -96,12 +96,11 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
     final isTabletOrDesktop = screenWidth >= 768;
+    final primaryColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F1218) : const Color(0xFFDDE3EA),
+      backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-        elevation: 1,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -175,7 +174,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
 
           // PDF Vector Export
           IconButton(
-            icon: const Icon(Icons.picture_as_pdf_rounded, color: AppColors.safetyOrange),
+            icon: Icon(Icons.picture_as_pdf_rounded, color: primaryColor),
             tooltip: 'Export Vector PDF',
             onPressed: _exportPdf,
           ),
@@ -191,13 +190,11 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
       body: isTabletOrDesktop
           ? Row(
               children: [
-                // Left Rail Toolbar on Tablet / Desktop
                 MarkupBottomToolbar(
                   state: state,
                   controller: controller,
                   isVerticalRail: true,
                 ),
-                // Center Canvas
                 Expanded(
                   child: _buildCanvasArea(state, controller, isDark),
                 ),
@@ -205,11 +202,9 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
             )
           : Stack(
               children: [
-                // Canvas Area
                 Positioned.fill(
                   child: _buildCanvasArea(state, controller, isDark),
                 ),
-                // Bottom Toolbar on Mobile
                 Positioned(
                   left: 0,
                   right: 0,
@@ -324,17 +319,17 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
               child: Container(
                 key: _canvasKey,
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF13171F) : const Color(0xFFF8FAFC),
+                  color: AppColors.canvasPaper, // Pure white paper background in BOTH light & dark modes
                   borderRadius: BorderRadius.circular(4),
                   boxShadow: const [
-                    BoxShadow(color: Colors.black38, blurRadius: 16, offset: Offset(0, 6)),
+                    BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 4)),
                   ],
                 ),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
                     // Base Blueprint / Image Layer
-                    _buildBaseLayer(widget.drawing, isDark),
+                    _buildBaseLayer(widget.drawing),
 
                     // Custom Vector Pen & Text Markup Layer
                     LayoutBuilder(
@@ -364,7 +359,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
     );
   }
 
-  Widget _buildBaseLayer(DrawingFile drawing, bool isDark) {
+  Widget _buildBaseLayer(DrawingFile drawing) {
     final path = drawing.localPath;
     if (drawing.isPdf) {
       final fileExists = !kIsWeb && File(path).existsSync();
@@ -387,7 +382,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
         canDebug: false,
         dynamicLayout: false,
         maxPageWidth: 1600,
-        loadingWidget: const Center(child: CircularProgressIndicator(color: AppColors.safetyOrange)),
+        loadingWidget: const Center(child: CircularProgressIndicator()),
         pdfFileName: '${drawing.name}.pdf',
       );
     } else {
@@ -398,9 +393,9 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.architecture_rounded, size: 64, color: AppColors.safetyOrange.withOpacity(0.5)),
+              const Icon(Icons.architecture_rounded, size: 64, color: AppColors.lightPrimary),
               const SizedBox(height: 8),
-              Text(drawing.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              Text(drawing.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
             ],
           ),
         );

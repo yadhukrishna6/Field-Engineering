@@ -105,7 +105,7 @@ class DrawingCanvasPainter extends CustomPainter {
     // If selected, draw selection bounding halo & indicator
     if (isSelected) {
       final selPaint = Paint()
-        ..color = AppColors.safetyOrange
+        ..color = AppColors.inkOrange
         ..strokeWidth = 2.0
         ..style = PaintingStyle.stroke;
       final selRect = boxRect.inflate(3);
@@ -114,7 +114,7 @@ class DrawingCanvasPainter extends CustomPainter {
 
       // Corner handles
       final handlePaint = Paint()
-        ..color = AppColors.safetyOrange
+        ..color = AppColors.inkOrange
         ..style = PaintingStyle.fill;
       canvas.drawCircle(selRect.topLeft, 3.5, handlePaint);
       canvas.drawCircle(selRect.topRight, 3.5, handlePaint);

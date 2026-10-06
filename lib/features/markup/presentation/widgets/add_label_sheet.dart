@@ -60,6 +60,11 @@ class _AddLabelSheetState extends State<AddLabelSheet> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final keyboardPadding = MediaQuery.of(context).viewInsets.bottom;
+    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+    final outlineColor = isDark ? AppColors.darkOutline : AppColors.lightOutline;
+    final textColor = isDark ? AppColors.darkText : AppColors.lightText;
+    final secondaryTextColor = isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
+    final primaryColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
 
     return Center(
       child: ConstrainedBox(
@@ -67,8 +72,8 @@ class _AddLabelSheetState extends State<AddLabelSheet> {
         child: Container(
           padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + keyboardPadding),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            color: surfaceColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: SafeArea(
             top: false,
@@ -82,20 +87,20 @@ class _AddLabelSheetState extends State<AddLabelSheet> {
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.4),
+                        color: secondaryTextColor.withOpacity(0.4),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                   ),
                   const SizedBox(height: 14),
 
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.text_fields_rounded, color: AppColors.safetyOrange),
-                      SizedBox(width: 8),
+                      Icon(Icons.text_fields_rounded, color: primaryColor),
+                      const SizedBox(width: 8),
                       Text(
                         'Add Engineering Label',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
                       ),
                     ],
                   ),
@@ -107,17 +112,25 @@ class _AddLabelSheetState extends State<AddLabelSheet> {
                     autofocus: true,
                     maxLines: 2,
                     style: AppTypography.engineeringTextStyle(
-                      color: isDark ? Colors.white : Colors.black87,
+                      color: textColor,
                       fontSize: 14,
                     ),
                     decoration: InputDecoration(
                       hintText: 'e.g. 4"-HC-1002 Tie-in location',
-                      hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                      hintStyle: TextStyle(color: secondaryTextColor, fontSize: 13),
                       filled: true,
-                      fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                      fillColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.black12),
+                        borderSide: BorderSide(color: outlineColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: outlineColor),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: primaryColor, width: 1.5),
                       ),
                     ),
                   ),
@@ -126,13 +139,13 @@ class _AddLabelSheetState extends State<AddLabelSheet> {
                   // Size Selector S / M / L
                   Row(
                     children: [
-                      const Text('Size: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text('Size: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
                       const SizedBox(width: 12),
-                      _buildSizeChip('S', 'Small (11pt)'),
+                      _buildSizeChip('S', 'Small (11pt)', primaryColor),
                       const SizedBox(width: 8),
-                      _buildSizeChip('M', 'Medium (14pt)'),
+                      _buildSizeChip('M', 'Medium (14pt)', primaryColor),
                       const SizedBox(width: 8),
-                      _buildSizeChip('L', 'Large (18pt)'),
+                      _buildSizeChip('L', 'Large (18pt)', primaryColor),
                     ],
                   ),
                   const SizedBox(height: 14),
@@ -140,7 +153,7 @@ class _AddLabelSheetState extends State<AddLabelSheet> {
                   // Color Selector Dots
                   Row(
                     children: [
-                      const Text('Color: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text('Color: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
                       const SizedBox(width: 12),
                       ...kMarkupColorPresets.map((color) {
                         final isSelected = _selectedColor.value == color.value;
@@ -154,7 +167,7 @@ class _AddLabelSheetState extends State<AddLabelSheet> {
                               color: color,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: isSelected ? Colors.white : Colors.black26,
+                                color: isSelected ? Colors.white : outlineColor,
                                 width: isSelected ? 3 : 1,
                               ),
                             ),
@@ -172,18 +185,18 @@ class _AddLabelSheetState extends State<AddLabelSheet> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                      color: isDark ? AppColors.darkBackground : AppColors.lightBackground,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white10),
+                      border: Border.all(color: outlineColor),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.lock_outline_rounded, size: 14, color: Colors.grey),
-                        SizedBox(width: 6),
+                        Icon(Icons.lock_outline_rounded, size: 14, color: secondaryTextColor),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'Drawing font is fixed to Engineering standard for review consistency.',
-                            style: TextStyle(fontSize: 10, color: Colors.grey),
+                            'Font is fixed to uniform Engineering standard for review consistency.',
+                            style: TextStyle(fontSize: 10, color: secondaryTextColor),
                           ),
                         ),
                       ],
@@ -194,8 +207,8 @@ class _AddLabelSheetState extends State<AddLabelSheet> {
                   // Done / Place Button
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.safetyOrange,
-                      foregroundColor: Colors.white,
+                      backgroundColor: primaryColor,
+                      foregroundColor: isDark ? AppColors.darkOnPrimary : AppColors.lightOnPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
@@ -217,12 +230,12 @@ class _AddLabelSheetState extends State<AddLabelSheet> {
     );
   }
 
-  Widget _buildSizeChip(String sizeCode, String label) {
+  Widget _buildSizeChip(String sizeCode, String label, Color primaryColor) {
     final isSelected = _selectedSize == sizeCode;
     return ChoiceChip(
       label: Text(sizeCode, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
       selected: isSelected,
-      selectedColor: AppColors.safetyOrange.withOpacity(0.2),
+      selectedColor: primaryColor.withOpacity(0.2),
       onSelected: (selected) {
         if (selected) setState(() => _selectedSize = sizeCode);
       },

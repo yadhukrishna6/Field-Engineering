@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../domain/models/drawing_file.dart';
+import '../../domain/models/page_markup.dart';
 import '../../domain/repositories/markup_repository.dart';
 import '../../data/repositories/markup_repository_impl.dart';
 
@@ -11,22 +12,32 @@ final markupRepositoryProvider = Provider<MarkupRepository>((ref) {
 class DrawingsListState {
   final bool isLoading;
   final List<DrawingFile> drawings;
+  final Map<String, int> markupCountByDrawing; // total strokes + labels per drawing
   final String? errorMessage;
 
   const DrawingsListState({
     this.isLoading = false,
     this.drawings = const [],
+    this.markupCountByDrawing = const {},
     this.errorMessage,
   });
+
+  int get totalFilesCount => drawings.length;
+  int get filesWithMarkupCount =>
+      drawings.where((d) => (markupCountByDrawing[d.id] ?? 0) > 0).length;
+
+  List<DrawingFile> get recentDrawings => drawings.take(2).toList();
 
   DrawingsListState copyWith({
     bool? isLoading,
     List<DrawingFile>? drawings,
+    Map<String, int>? markupCountByDrawing,
     String? errorMessage,
   }) {
     return DrawingsListState(
       isLoading: isLoading ?? this.isLoading,
       drawings: drawings ?? this.drawings,
+      markupCountByDrawing: markupCountByDrawing ?? this.markupCountByDrawing,
       errorMessage: errorMessage,
     );
   }
@@ -44,10 +55,29 @@ class DrawingsListController extends StateNotifier<DrawingsListState> {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       final list = await _repository.getDrawings();
-      state = state.copyWith(isLoading: false, drawings: list);
+      final markupCounts = <String, int>{};
+
+      for (final drawing in list) {
+        int totalItems = 0;
+        for (int p = 1; p <= drawing.pageCount; p++) {
+          final markup = await _repository.getPageMarkup(drawing.id, p);
+          totalItems += markup.strokes.length + markup.labels.length;
+        }
+        markupCounts[drawing.id] = totalItems;
+      }
+
+      state = state.copyWith(
+        isLoading: false,
+        drawings: list,
+        markupCountByDrawing: markupCounts,
+      );
     } catch (e) {
       state = state.copyWith(isLoading: false, errorMessage: e.toString());
     }
+  }
+
+  Future<PageMarkup> getPageMarkup(String drawingId, int pageNumber) async {
+    return await _repository.getPageMarkup(drawingId, pageNumber);
   }
 
   Future<DrawingFile> addDrawing({

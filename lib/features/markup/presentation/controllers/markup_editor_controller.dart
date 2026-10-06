@@ -1,3 +1,4 @@
+import '../../../../core/theme/app_colors.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,10 +12,10 @@ import '../../domain/repositories/markup_repository.dart';
 import 'drawings_list_controller.dart';
 
 const List<Color> kMarkupColorPresets = [
-  Color(0xFFFF3B30), // Safety Red
-  Color(0xFF34C759), // Field Green
-  Color(0xFF007AFF), // P&ID Blue
-  Color(0xFFFF9500), // Hazard Orange
+  AppColors.inkRed,    // Red #C0452A
+  AppColors.inkBlue,   // Blue #185FA5
+  AppColors.inkDark,   // Dark #2C2C2A
+  AppColors.inkOrange, // Orange #E08A5B
 ];
 
 const List<double> kStrokeWidthPresets = [
@@ -58,7 +59,7 @@ class MarkupEditorState {
     required this.drawing,
     this.currentPage = 1,
     this.selectedTool = MarkupTool.pen,
-    this.activeColor = const Color(0xFFFF3B30),
+    this.activeColor = AppColors.inkRed,
     this.activeStrokeWidth = 4.0,
     this.activeLabelSize = 'M',
     this.strokes = const [],

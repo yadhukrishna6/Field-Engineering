@@ -17,84 +17,87 @@ class MarkupBottomToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
+    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+    final outlineColor = isDark ? AppColors.darkOutline : AppColors.lightOutline;
+    final textColor = isDark ? AppColors.darkText : AppColors.lightText;
+    final secondaryTextColor = isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
 
     if (isVerticalRail) {
       return Container(
-        width: 140,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
+        width: 130,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E293B) : Colors.white,
-          border: Border(right: BorderSide(color: isDark ? Colors.white10 : Colors.black12)),
-          boxShadow: const [
-            BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(3, 0)),
-          ],
+          color: surfaceColor,
+          border: Border(right: BorderSide(color: outlineColor, width: 1.0)),
         ),
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
+              Text(
                 'TOOLS',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: secondaryTextColor),
               ),
-              const SizedBox(height: 10),
-              _buildToolButton(MarkupTool.pen, Icons.edit_rounded, 'Pen'),
               const SizedBox(height: 8),
-              _buildToolButton(MarkupTool.text, Icons.text_fields_rounded, 'Text'),
-              const SizedBox(height: 8),
-              _buildToolButton(MarkupTool.eraser, Icons.auto_fix_high_rounded, 'Eraser'),
-              const Divider(height: 24),
+              _buildToolButton(MarkupTool.pen, Icons.edit_rounded, 'Pen', primaryColor, textColor, secondaryTextColor),
+              const SizedBox(height: 6),
+              _buildToolButton(MarkupTool.text, Icons.text_fields_rounded, 'Text', primaryColor, textColor, secondaryTextColor),
+              const SizedBox(height: 6),
+              _buildToolButton(MarkupTool.eraser, Icons.auto_fix_high_rounded, 'Eraser', Colors.redAccent, textColor, secondaryTextColor),
+              Divider(height: 20, color: outlineColor),
               if (state.selectedTool == MarkupTool.pen) ...[
-                const Text(
+                Text(
                   'WIDTH',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: secondaryTextColor),
                 ),
                 const SizedBox(height: 8),
-                _buildWidthOption(2.0, 'Thin', 4.0),
+                _buildWidthOption(2.0, 'Thin', 4.0, primaryColor, outlineColor, textColor, secondaryTextColor),
                 const SizedBox(height: 6),
-                _buildWidthOption(4.0, 'Medium', 7.0),
+                _buildWidthOption(4.0, 'Medium', 7.0, primaryColor, outlineColor, textColor, secondaryTextColor),
                 const SizedBox(height: 6),
-                _buildWidthOption(8.0, 'Thick', 11.0),
-                const Divider(height: 24),
-                const Text(
+                _buildWidthOption(8.0, 'Thick', 11.0, primaryColor, outlineColor, textColor, secondaryTextColor),
+                Divider(height: 20, color: outlineColor),
+                Text(
                   'COLOR',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: secondaryTextColor),
                 ),
                 const SizedBox(height: 8),
-                _buildVerticalColorPresets(),
+                _buildVerticalColorPresets(outlineColor),
               ] else if (state.selectedTool == MarkupTool.text) ...[
-                const Text(
+                Text(
                   'SIZE',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: secondaryTextColor),
                 ),
                 const SizedBox(height: 8),
-                _buildSizeOption('S', 'Small'),
+                _buildSizeOption('S', 'Small', primaryColor, outlineColor, textColor),
                 const SizedBox(height: 6),
-                _buildSizeOption('M', 'Medium'),
+                _buildSizeOption('M', 'Medium', primaryColor, outlineColor, textColor),
                 const SizedBox(height: 6),
-                _buildSizeOption('L', 'Large'),
-                const Divider(height: 24),
-                const Text(
+                _buildSizeOption('L', 'Large', primaryColor, outlineColor, textColor),
+                Divider(height: 20, color: outlineColor),
+                Text(
                   'COLOR',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: secondaryTextColor),
                 ),
                 const SizedBox(height: 8),
-                _buildVerticalColorPresets(),
+                _buildVerticalColorPresets(outlineColor),
                 if (state.selectedLabelId != null) ...[
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.redAccent,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    icon: const Icon(Icons.delete_rounded, size: 16),
-                    label: const Text('Delete', style: TextStyle(fontSize: 12)),
+                    icon: const Icon(Icons.delete_rounded, size: 14),
+                    label: const Text('Delete', style: TextStyle(fontSize: 11)),
                     onPressed: () => controller.deleteSelectedLabel(),
                   ),
                 ],
@@ -106,17 +109,17 @@ class MarkupBottomToolbar extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text(
-                    'Tap or drag over stroke/label to erase',
+                    'Tap or swipe over item to erase',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 10, color: Colors.redAccent, fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
-              const Divider(height: 24),
+              Divider(height: 20, color: outlineColor),
               IconButton(
                 icon: Icon(
                   state.allowFingerDrawing ? Icons.touch_app_rounded : Icons.edit_note_rounded,
-                  color: state.allowFingerDrawing ? Colors.cyanAccent : Colors.grey,
+                  color: state.allowFingerDrawing ? primaryColor : secondaryTextColor,
                 ),
                 tooltip: state.allowFingerDrawing ? 'Finger Drawing ON' : 'Stylus Only',
                 onPressed: () => controller.toggleFingerDrawing(),
@@ -127,37 +130,35 @@ class MarkupBottomToolbar extends StatelessWidget {
       );
     }
 
-    // Phone / Portrait Bottom Toolbar
+    // Phone Bottom Toolbar
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, -3)),
-        ],
+        color: surfaceColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        border: Border(top: BorderSide(color: outlineColor, width: 1.0)),
       ),
       child: SafeArea(
         top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Row 1: Tool Selection Tabs (Pen, Text, Eraser)
+            // Row 1: Tools & Actions
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   children: [
-                    _buildToolButton(MarkupTool.pen, Icons.edit_rounded, 'Pen'),
+                    _buildToolButton(MarkupTool.pen, Icons.edit_rounded, 'Pen', primaryColor, textColor, secondaryTextColor),
                     const SizedBox(width: 8),
-                    _buildToolButton(MarkupTool.text, Icons.text_fields_rounded, 'Text'),
+                    _buildToolButton(MarkupTool.text, Icons.text_fields_rounded, 'Text', primaryColor, textColor, secondaryTextColor),
                     const SizedBox(width: 8),
-                    _buildToolButton(MarkupTool.eraser, Icons.auto_fix_high_rounded, 'Eraser'),
+                    _buildToolButton(MarkupTool.eraser, Icons.auto_fix_high_rounded, 'Eraser', Colors.redAccent, textColor, secondaryTextColor),
                   ],
                 ),
                 if (state.selectedTool == MarkupTool.text && state.selectedLabelId != null)
                   IconButton(
-                    icon: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent, size: 24),
+                    icon: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent, size: 22),
                     tooltip: 'Delete Selected Label',
                     onPressed: () => controller.deleteSelectedLabel(),
                   )
@@ -165,7 +166,7 @@ class MarkupBottomToolbar extends StatelessWidget {
                   IconButton(
                     icon: Icon(
                       state.allowFingerDrawing ? Icons.touch_app_rounded : Icons.edit_note_rounded,
-                      color: state.allowFingerDrawing ? Colors.cyanAccent : Colors.grey,
+                      color: state.allowFingerDrawing ? primaryColor : secondaryTextColor,
                     ),
                     tooltip: state.allowFingerDrawing ? 'Finger Inking Active' : 'Stylus Only Mode',
                     onPressed: () => controller.toggleFingerDrawing(),
@@ -174,21 +175,21 @@ class MarkupBottomToolbar extends StatelessWidget {
             ),
             const SizedBox(height: 10),
 
-            // Row 2: Contextual Controls
+            // Row 2: Tool Context Options
             if (state.selectedTool == MarkupTool.pen) ...[
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
                     children: [
-                      _buildWidthOption(2.0, 'Thin', 4.0),
-                      const SizedBox(width: 8),
-                      _buildWidthOption(4.0, 'Medium', 7.0),
-                      const SizedBox(width: 8),
-                      _buildWidthOption(8.0, 'Thick', 11.0),
+                      _buildWidthOption(2.0, 'Thin', 4.0, primaryColor, outlineColor, textColor, secondaryTextColor),
+                      const SizedBox(width: 6),
+                      _buildWidthOption(4.0, 'Medium', 7.0, primaryColor, outlineColor, textColor, secondaryTextColor),
+                      const SizedBox(width: 6),
+                      _buildWidthOption(8.0, 'Thick', 11.0, primaryColor, outlineColor, textColor, secondaryTextColor),
                     ],
                   ),
-                  _buildColorPresets(),
+                  _buildColorPresets(outlineColor),
                 ],
               ),
             ] else if (state.selectedTool == MarkupTool.text) ...[
@@ -197,22 +198,22 @@ class MarkupBottomToolbar extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      _buildSizeOption('S', 'Small'),
-                      const SizedBox(width: 8),
-                      _buildSizeOption('M', 'Medium'),
-                      const SizedBox(width: 8),
-                      _buildSizeOption('L', 'Large'),
+                      _buildSizeOption('S', 'Small', primaryColor, outlineColor, textColor),
+                      const SizedBox(width: 6),
+                      _buildSizeOption('M', 'Med', primaryColor, outlineColor, textColor),
+                      const SizedBox(width: 6),
+                      _buildSizeOption('L', 'Lrg', primaryColor, outlineColor, textColor),
                     ],
                   ),
-                  _buildColorPresets(),
+                  _buildColorPresets(outlineColor),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 state.selectedLabelId != null
                     ? 'Label selected: Drag to move • Tap trash to delete'
-                    : 'Tap drawing to place label • Uniform Engineering Font',
-                style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    : 'Tap drawing to place label • Fixed Engineering Font',
+                style: TextStyle(fontSize: 10, color: secondaryTextColor),
               ),
             ] else if (state.selectedTool == MarkupTool.eraser) ...[
               Container(
@@ -220,16 +221,15 @@ class MarkupBottomToolbar extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.redAccent.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
                 ),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.cleaning_services_rounded, size: 16, color: Colors.redAccent),
-                    SizedBox(width: 8),
+                    Icon(Icons.cleaning_services_rounded, size: 15, color: Colors.redAccent),
+                    SizedBox(width: 6),
                     Text(
-                      'Tap or swipe across any stroke or label to erase completely',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.redAccent),
+                      'Tap or swipe across any stroke or label to erase',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.redAccent),
                     ),
                   ],
                 ),
@@ -241,31 +241,37 @@ class MarkupBottomToolbar extends StatelessWidget {
     );
   }
 
-  Widget _buildToolButton(MarkupTool tool, IconData icon, String label) {
+  Widget _buildToolButton(
+    MarkupTool tool,
+    IconData icon,
+    String label,
+    Color activeColor,
+    Color textColor,
+    Color secondaryTextColor,
+  ) {
     final isSelected = state.selectedTool == tool;
-    final activeColor = tool == MarkupTool.eraser ? Colors.redAccent : AppColors.safetyOrange;
 
     return InkWell(
       onTap: () => controller.selectTool(tool),
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: isSelected ? activeColor.withOpacity(0.2) : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
+          color: isSelected ? activeColor.withOpacity(0.18) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: isSelected ? activeColor : Colors.transparent),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: isSelected ? activeColor : Colors.grey, size: 18),
-            const SizedBox(width: 5),
+            Icon(icon, color: isSelected ? activeColor : secondaryTextColor, size: 16),
+            const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? activeColor : Colors.grey,
-                fontSize: 12,
+                color: isSelected ? activeColor : secondaryTextColor,
+                fontSize: 11,
               ),
             ),
           ],
@@ -274,68 +280,76 @@ class MarkupBottomToolbar extends StatelessWidget {
     );
   }
 
-  Widget _buildColorPresets() {
+  Widget _buildColorPresets(Color outlineColor) {
     return Row(
       children: kMarkupColorPresets.map((color) {
         final isSelected = state.activeColor.value == color.value;
         return GestureDetector(
           onTap: () => controller.setColor(color),
           child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            width: 28,
-            height: 28,
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            width: 26,
+            height: 26,
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
               border: Border.all(
-                color: isSelected ? Colors.white : Colors.black26,
+                color: isSelected ? Colors.white : outlineColor,
                 width: isSelected ? 2.5 : 1.0,
               ),
             ),
-            child: isSelected ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+            child: isSelected ? const Icon(Icons.check, size: 13, color: Colors.white) : null,
           ),
         );
       }).toList(),
     );
   }
 
-  Widget _buildVerticalColorPresets() {
+  Widget _buildVerticalColorPresets(Color outlineColor) {
     return Wrap(
       alignment: WrapAlignment.center,
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 6,
+      runSpacing: 6,
       children: kMarkupColorPresets.map((color) {
         final isSelected = state.activeColor.value == color.value;
         return GestureDetector(
           onTap: () => controller.setColor(color),
           child: Container(
-            width: 28,
-            height: 28,
+            width: 26,
+            height: 26,
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
               border: Border.all(
-                color: isSelected ? Colors.white : Colors.black26,
+                color: isSelected ? Colors.white : outlineColor,
                 width: isSelected ? 2.5 : 1.0,
               ),
             ),
-            child: isSelected ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+            child: isSelected ? const Icon(Icons.check, size: 13, color: Colors.white) : null,
           ),
         );
       }).toList(),
     );
   }
 
-  Widget _buildWidthOption(double width, String label, double dotSize) {
+  Widget _buildWidthOption(
+    double width,
+    String label,
+    double dotSize,
+    Color primaryColor,
+    Color outlineColor,
+    Color textColor,
+    Color secondaryTextColor,
+  ) {
     final isSelected = state.activeStrokeWidth == width;
     return GestureDetector(
       onTap: () => controller.setStrokeWidth(width),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.safetyOrange.withOpacity(0.2) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: isSelected ? AppColors.safetyOrange : Colors.white12),
+          color: isSelected ? primaryColor.withOpacity(0.18) : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: isSelected ? primaryColor : outlineColor),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -344,16 +358,17 @@ class MarkupBottomToolbar extends StatelessWidget {
               width: dotSize,
               height: dotSize,
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.safetyOrange : Colors.grey,
+                color: isSelected ? primaryColor : secondaryTextColor,
                 shape: BoxShape.circle,
               ),
             ),
-            const SizedBox(width: 5),
+            const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? primaryColor : textColor,
               ),
             ),
           ],
@@ -362,24 +377,30 @@ class MarkupBottomToolbar extends StatelessWidget {
     );
   }
 
-  Widget _buildSizeOption(String sizeCode, String label) {
+  Widget _buildSizeOption(
+    String sizeCode,
+    String label,
+    Color primaryColor,
+    Color outlineColor,
+    Color textColor,
+  ) {
     final isSelected = state.activeLabelSize == sizeCode;
     return GestureDetector(
       onTap: () => controller.setLabelSize(sizeCode),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.safetyOrange.withOpacity(0.2) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: isSelected ? AppColors.safetyOrange : Colors.white12),
+          color: isSelected ? primaryColor.withOpacity(0.18) : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: isSelected ? primaryColor : outlineColor),
         ),
         child: Center(
           child: Text(
             '$sizeCode ($label)',
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 10,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: isSelected ? AppColors.safetyOrange : null,
+              color: isSelected ? primaryColor : textColor,
             ),
           ),
         ),
