@@ -9,6 +9,7 @@ import '../../domain/models/drawing.dart';
 import '../../domain/models/markup.dart';
 import '../controllers/markup_controller.dart';
 import 'drawing_markup_painter.dart';
+import 'text_annotation_dialog.dart';
 import '../../../../shared/widgets/loading_state_view.dart';
 import '../../../../core/theme/color_palette.dart';
 
@@ -55,11 +56,44 @@ class _DrawingCanvasViewState extends State<DrawingCanvasView> {
       return;
     }
 
+    final pagePoint = _screenToPageCoordinates(event.position);
+    setState(() => _currentPointerLocation = pagePoint);
+
+    if (widget.viewerState.isDrawingMode && widget.viewerState.selectedTool == MarkupType.text) {
+      _showTextDialog(pagePoint);
+      return;
+    }
+
     if (widget.viewerState.isDrawingMode && widget.viewerState.selectedTool != null) {
-      final pagePoint = _screenToPageCoordinates(event.position);
-      setState(() => _currentPointerLocation = pagePoint);
       widget.controller.startDrawing(pagePoint);
     }
+  }
+
+  void _showTextDialog(Point2D position) {
+    showDialog(
+      context: context,
+      builder: (ctx) => TextAnnotationDialog(
+        initialColor: widget.viewerState.activeColor,
+        initialFontSize: widget.viewerState.fontSize,
+        onConfirm: (text, fontSize, rotation, withLeader) {
+          Point2D? leaderPoint;
+          if (withLeader) {
+            leaderPoint = Point2D(
+              (position.x + 0.08).clamp(0.0, 1.0),
+              (position.y + 0.08).clamp(0.0, 1.0),
+            );
+          }
+          widget.controller.addTextCallout(
+            position,
+            text,
+            fontSize: fontSize,
+            rotation: rotation,
+            leaderPoint: leaderPoint,
+            hasHalo: true,
+          );
+        },
+      ),
+    );
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
@@ -71,13 +105,17 @@ class _DrawingCanvasViewState extends State<DrawingCanvasView> {
     setState(() => _currentPointerLocation = pagePoint);
 
     if (widget.viewerState.isDrawingMode && widget.viewerState.selectedTool != null) {
-      widget.controller.updateDrawing(pagePoint);
+      if (widget.viewerState.selectedTool != MarkupType.text) {
+        widget.controller.updateDrawing(pagePoint);
+      }
     }
   }
 
   void _handlePointerUp(PointerUpEvent event) {
     if (widget.viewerState.isDrawingMode && widget.viewerState.selectedTool != null) {
-      widget.controller.finishDrawing();
+      if (widget.viewerState.selectedTool != MarkupType.text) {
+        widget.controller.finishDrawing();
+      }
     }
   }
 

@@ -6,6 +6,7 @@ import '../../domain/models/markup.dart';
 import '../../domain/models/measurement.dart';
 import '../../domain/models/drawing_calibration.dart';
 import '../../domain/utils/measurement_calculator.dart';
+import '../../domain/utils/stroke_smoother.dart';
 import '../../domain/repositories/markups_repository.dart';
 import '../../domain/repositories/measurements_repository.dart';
 import '../../../../core/providers/core_providers.dart';
@@ -27,7 +28,7 @@ class DrawingViewerState {
   final int currentPage;
   final int totalPages;
   final MarkupType? selectedTool; // null = Pan/Navigate mode
-  final MeasurementType? selectedMeasurementTool; // Phase 3 measurement tool
+  final MeasurementType? selectedMeasurementTool;
   final Color currentColor;
   final Color? currentFillColor;
   final double strokeWidth;
@@ -35,11 +36,11 @@ class DrawingViewerState {
   final double fontSize;
   final Set<DrawingLayer> visibleLayers;
   final List<Markup> markups;
-  final List<Measurement> measurements; // Phase 3 measurements
-  final DrawingCalibration? calibration; // Phase 3 scale calibration
+  final List<Measurement> measurements;
+  final DrawingCalibration? calibration;
   final bool isCalibrating;
   final List<Point2D> calibrationPoints;
-  final String activeCountComponentName; // Phase 3 count tool tag
+  final String activeCountComponentName;
   final String? selectedMarkupId;
   final String? selectedMeasurementId;
   final Set<String> selectedMarkupIds;
@@ -62,11 +63,11 @@ class DrawingViewerState {
     this.totalPages = 1,
     this.selectedTool,
     this.selectedMeasurementTool,
-    this.currentColor = const Color(0xFFD32F2F), // Default Red
+    this.currentColor = const Color(0xFFD32F2F),
     this.currentFillColor,
     this.strokeWidth = 3.0,
     this.opacity = 1.0,
-    this.fontSize = 14.0,
+    this.fontSize = 13.0,
     this.visibleLayers = const {
       DrawingLayer.original,
       DrawingLayer.markup,
@@ -404,20 +405,28 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
     );
   }
 
-  void addCalibrationPoint(Point2D point) {
-    final points = List<Point2D>.from(state.calibrationPoints)..add(point);
-    state = state.copyWith(calibrationPoints: points);
+  void cancelCalibration() {
+    state = state.copyWith(
+      isCalibrating: false,
+      calibrationPoints: const [],
+    );
   }
 
-  Future<DrawingCalibration> applyCalibration(double knownDistance, CalibrationUnit unit) async {
-    if (state.calibrationPoints.length < 2) {
-      throw Exception('Need 2 reference points to calibrate scale.');
-    }
+  void addCalibrationPoint(Point2D point) {
+    final updated = List<Point2D>.from(state.calibrationPoints)..add(point);
+    state = state.copyWith(calibrationPoints: updated);
+  }
+
+  Future<DrawingCalibration?> applyCalibration(
+    double knownDistance,
+    CalibrationUnit unit,
+  ) async {
+    if (state.calibrationPoints.length < 2) return null;
 
     final p1 = state.calibrationPoints[0];
     final p2 = state.calibrationPoints[1];
 
-    final calibration = DrawingCalibration.fromPoints(
+    final newCalibration = DrawingCalibration.fromPoints(
       id: _uuid.v4(),
       drawingId: _drawingId,
       pageNumber: state.currentPage,
@@ -428,51 +437,23 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
     );
 
     if (_measurementsRepository != null) {
-      await _measurementsRepository.saveCalibration(calibration);
+      await _measurementsRepository.saveCalibration(newCalibration);
     }
 
     state = state.copyWith(
-      calibration: calibration,
+      calibration: newCalibration,
       isCalibrating: false,
       calibrationPoints: const [],
-      isDrawingMode: false,
     );
 
-    // Re-evaluate existing measurements on this page with the new calibration scale
-    _recalculateMeasurements(calibration);
-
-    return calibration;
+    return newCalibration;
   }
 
-  void cancelCalibration() {
-    state = state.copyWith(
-      isCalibrating: false,
-      calibrationPoints: const [],
-      isDrawingMode: false,
-    );
-  }
-
-  void _recalculateMeasurements(DrawingCalibration calibration) {
-    final updatedMeasurements = state.measurements.map((m) {
-      if (m.pageNumber == state.currentPage) {
-        final newValue = MeasurementCalculator.calculateValue(
-          type: m.type,
-          points: m.points,
-          calibration: calibration,
-        );
-        final unitSymbol = MeasurementCalculator.getUnitSymbol(m.type, calibration);
-        return m.copyWith(
-          calculatedValue: newValue,
-          unit: unitSymbol,
-          calibrationId: calibration.id,
-        );
-      }
-      return m;
-    }).toList();
-
-    state = state.copyWith(measurements: updatedMeasurements, hasUnsavedChanges: true);
-    _scheduleAutosave();
-  }
+  Future<DrawingCalibration?> completeCalibration({
+    required double knownDistance,
+    required CalibrationUnit unit,
+  }) =>
+      applyCalibration(knownDistance, unit);
 
   // --- Part 2 & Part 5: Drawing & Measurement Interaction ---
 
@@ -564,6 +545,11 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
       layer = DrawingLayer.inspection;
     }
 
+    List<Point2D> finalPoints = List<Point2D>.from(state.inProgressPoints);
+    if ((tool == MarkupType.pen || tool == MarkupType.highlighter) && finalPoints.length > 3) {
+      finalPoints = StrokeSmoother.simplifyRDP(finalPoints, epsilon: 0.0008);
+    }
+
     final newMarkup = Markup(
       id: _uuid.v4(),
       drawingId: _drawingId,
@@ -574,9 +560,9 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
           ? state.currentColor.withOpacity(0.4)
           : state.currentColor,
       fillColor: state.currentFillColor,
-      strokeWidth: tool == MarkupType.highlighter ? 18.0 : state.strokeWidth,
-      opacity: tool == MarkupType.highlighter ? 0.45 : state.opacity,
-      points: List<Point2D>.from(state.inProgressPoints),
+      strokeWidth: tool == MarkupType.highlighter ? 20.0 : state.strokeWidth,
+      opacity: tool == MarkupType.highlighter ? 0.38 : state.opacity,
+      points: finalPoints,
       bounds: state.inProgressBounds,
       text: text,
       metadata: metadata,
@@ -586,142 +572,103 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
     );
 
     _pushUndoState();
-
-    final updatedMarkups = List<Markup>.from(state.markups)..add(newMarkup);
+    final updated = List<Markup>.from(state.markups)..add(newMarkup);
     state = state.copyWith(
-      markups: updatedMarkups,
+      markups: updated,
       clearInProgress: true,
       hasUnsavedChanges: true,
     );
-
     _scheduleAutosave();
   }
 
-  // --- Measurement Pointer Handlers ---
-
   void _handleMeasurementPointerDown(Point2D point) {
-    final mTool = state.selectedMeasurementTool!;
-
-    if (mTool == MeasurementType.count) {
-      // Direct placement of count marker
-      addCountMarker(point, state.activeCountComponentName);
+    final type = state.selectedMeasurementTool!;
+    if (type == MeasurementType.count) {
+      _addCountMarker(point);
       return;
     }
 
-    if (mTool == MeasurementType.polylineDistance || mTool == MeasurementType.area || mTool == MeasurementType.perimeter) {
-      // Multi-point tool: Append points
-      final points = List<Point2D>.from(state.inProgressPoints)..add(point);
-      state = state.copyWith(inProgressPoints: points);
-    } else {
-      // 2-point tools (distance, radius, diameter) or 3-point angle
-      state = state.copyWith(inProgressPoints: [point, point]);
-    }
+    state = state.copyWith(
+      inProgressPoints: [point],
+    );
   }
 
   void _handleMeasurementPointerMove(Point2D point) {
-    final mTool = state.selectedMeasurementTool;
-    if (mTool == null || state.inProgressPoints.isEmpty) return;
+    final type = state.selectedMeasurementTool!;
+    if (type == MeasurementType.count) return;
 
-    if (mTool == MeasurementType.distance || mTool == MeasurementType.radius || mTool == MeasurementType.diameter) {
-      final points = [state.inProgressPoints.first, point];
-      state = state.copyWith(inProgressPoints: points);
-    } else if (mTool == MeasurementType.angle && state.inProgressPoints.length == 2) {
-      final points = [state.inProgressPoints[0], state.inProgressPoints[1], point];
-      state = state.copyWith(inProgressPoints: points);
-    }
+    final updated = List<Point2D>.from(state.inProgressPoints)..add(point);
+    state = state.copyWith(inProgressPoints: updated);
   }
 
   void _handleMeasurementPointerUp() {
-    final mTool = state.selectedMeasurementTool;
-    if (mTool == null || state.inProgressPoints.isEmpty) return;
+    final type = state.selectedMeasurementTool!;
+    final points = state.inProgressPoints;
 
-    // For continuous 2-point distance / radius / diameter: Complete on pointer up
-    if (mTool == MeasurementType.distance || mTool == MeasurementType.radius || mTool == MeasurementType.diameter) {
-      if (state.inProgressPoints.length >= 2) {
-        commitCurrentMeasurement();
-      }
-    }
-  }
-
-  void commitCurrentMeasurement({String? customLabel}) {
-    final mTool = state.selectedMeasurementTool;
-    if (mTool == null || state.inProgressPoints.length < 2) {
+    if (points.length < 2 && type != MeasurementType.count) {
       state = state.copyWith(clearInProgress: true);
       return;
     }
 
     final cal = state.effectiveCalibration;
-    final calcVal = MeasurementCalculator.calculateValue(
-      type: mTool,
-      points: state.inProgressPoints,
+    final calculatedValue = MeasurementCalculator.calculateValue(
+      type: type,
+      points: points,
       calibration: cal,
     );
-    final unitSym = MeasurementCalculator.getUnitSymbol(mTool, cal);
+    final unitStr = MeasurementCalculator.getUnitSymbol(type, cal);
 
-    final measurement = Measurement(
+    final newMeasurement = Measurement(
       id: _uuid.v4(),
       drawingId: _drawingId,
       pageNumber: state.currentPage,
-      type: mTool,
-      points: List<Point2D>.from(state.inProgressPoints),
-      calculatedValue: calcVal,
-      unit: unitSym,
-      calibrationId: cal.id,
-      label: customLabel,
+      type: type,
+      points: List<Point2D>.from(points),
+      calculatedValue: calculatedValue,
+      unit: unitStr,
       color: state.currentColor,
       createdAt: DateTime.now(),
     );
 
     _pushMeasurementUndoState();
-
-    final updated = List<Measurement>.from(state.measurements)..add(measurement);
+    final updated = List<Measurement>.from(state.measurements)..add(newMeasurement);
     state = state.copyWith(
       measurements: updated,
       clearInProgress: true,
       hasUnsavedChanges: true,
     );
-
     _scheduleAutosave();
   }
 
-  // --- Part 5: Count Tool Engine ---
-
-  void setCountComponentName(String name) {
-    state = state.copyWith(activeCountComponentName: name);
-  }
-
-  void addCountMarker(Point2D position, String componentName) {
-    final existingCountOnPage = state.activePageMeasurements
-        .where((m) => m.type == MeasurementType.count && m.metadata?['componentName'] == componentName)
+  void _addCountMarker(Point2D point) {
+    final tag = state.activeCountComponentName;
+    final existingCount = state.activePageMeasurements
+        .where((m) => m.type == MeasurementType.count && m.label == tag)
         .length;
 
-    final nextNumber = existingCountOnPage + 1;
+    final nextNumber = existingCount + 1;
+    final formatted = '$tag #$nextNumber';
 
-    final countMeasurement = Measurement(
+    final newMeasurement = Measurement(
       id: _uuid.v4(),
       drawingId: _drawingId,
       pageNumber: state.currentPage,
       type: MeasurementType.count,
-      points: [position],
+      points: [point],
       calculatedValue: nextNumber.toDouble(),
-      unit: 'pcs',
-      label: '$componentName #$nextNumber',
+      unit: 'count',
+      label: formatted,
       color: state.currentColor,
-      metadata: {
-        'componentName': componentName,
-        'index': nextNumber,
-      },
+      metadata: {'componentName': tag, 'count': nextNumber},
       createdAt: DateTime.now(),
     );
 
     _pushMeasurementUndoState();
-
-    final updated = List<Measurement>.from(state.measurements)..add(countMeasurement);
+    final updated = List<Measurement>.from(state.measurements)..add(newMeasurement);
     state = state.copyWith(
       measurements: updated,
       hasUnsavedChanges: true,
     );
-
     _scheduleAutosave();
   }
 
@@ -737,7 +684,15 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
 
   // --- Specialized Annotations ---
 
-  void addTextCallout(Point2D position, String text, {double fontSize = 14.0}) {
+  void addTextCallout(
+    Point2D position,
+    String text, {
+    double fontSize = 13.0,
+    double rotation = 0.0,
+    Point2D? leaderPoint,
+    bool hasHalo = true,
+  }) {
+    final snappedRotation = StrokeSmoother.snapRotationRadians(rotation);
     final newMarkup = Markup(
       id: _uuid.v4(),
       drawingId: _drawingId,
@@ -745,13 +700,16 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
       layer: DrawingLayer.markup,
       type: MarkupType.text,
       color: state.currentColor,
-      fillColor: Colors.black.withOpacity(0.75),
+      fillColor: const Color(0xFF0F172A),
       strokeWidth: state.strokeWidth,
       opacity: state.opacity,
       points: [position],
-      bounds: Rect.fromLTWH(position.x, position.y, 0.25, 0.06),
+      bounds: Rect.fromLTWH(position.x, position.y, 0.22, 0.05),
       text: text,
       fontSize: fontSize,
+      rotation: snappedRotation,
+      leaderPoint: leaderPoint,
+      hasHalo: hasHalo,
       createdBy: 'Lead Field Engineer',
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
@@ -764,6 +722,19 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
       selectedMarkupId: newMarkup.id,
       hasUnsavedChanges: true,
     );
+    _scheduleAutosave();
+  }
+
+  void updateMarkupStatus(String markupId, String status) {
+    _pushUndoState();
+    final updated = state.markups.map((m) {
+      if (m.id == markupId) {
+        return m.copyWith(status: status, updatedAt: DateTime.now());
+      }
+      return m;
+    }).toList();
+
+    state = state.copyWith(markups: updated, hasUnsavedChanges: true);
     _scheduleAutosave();
   }
 
@@ -792,20 +763,26 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
     _scheduleAutosave();
   }
 
-  void addPhotoPin(Point2D position, {required String photoPath, required String caption}) {
+  void addPhotoPin(
+    Point2D position, {
+    String? photoUrl,
+    String? photoPath,
+    String? caption,
+  }) {
+    final finalUrl = photoPath ?? photoUrl ?? '';
     final newMarkup = Markup(
       id: _uuid.v4(),
       drawingId: _drawingId,
       pageNumber: state.currentPage,
       layer: DrawingLayer.photo,
       type: MarkupType.photoPin,
-      color: Colors.amberAccent,
+      color: Colors.amber.shade800,
       strokeWidth: 2.0,
       opacity: 1.0,
       points: [position],
       bounds: Rect.fromLTWH(position.x - 0.015, position.y - 0.03, 0.03, 0.03),
-      text: caption,
-      metadata: {'photoPath': photoPath},
+      text: 'PHOTO',
+      metadata: {'photoUrl': finalUrl, 'photoPath': finalUrl, 'caption': caption},
       createdBy: 'Lead Field Engineer',
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
@@ -817,18 +794,19 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
     _scheduleAutosave();
   }
 
-  void addFieldStamp(Point2D position, {required String stampText, required Color stampColor}) {
+  void addFieldStamp(Point2D position, String stampText, Color color) {
     final newMarkup = Markup(
       id: _uuid.v4(),
       drawingId: _drawingId,
       pageNumber: state.currentPage,
       layer: DrawingLayer.inspection,
       type: MarkupType.stamp,
-      color: stampColor,
-      strokeWidth: 3.0,
-      opacity: 0.9,
+      color: color,
+      fillColor: color.withOpacity(0.12),
+      strokeWidth: 2.5,
+      opacity: 1.0,
       points: [position],
-      bounds: Rect.fromLTWH(position.x, position.y, 0.18, 0.08),
+      bounds: Rect.fromLTWH(position.x, position.y, 0.28, 0.06),
       text: stampText,
       createdBy: 'Lead Field Engineer',
       createdAt: DateTime.now(),
@@ -844,35 +822,35 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
   void addEngineeringSymbol(
     Point2D position, {
     required String symbolId,
-    required String name,
+    String? name,
     required String tag,
-    required Color color,
+    Color? color,
     double scale = 1.0,
     double rotation = 0.0,
     bool isStamp = false,
   }) {
-    final width = (isStamp ? 0.22 : 0.08) * scale;
-    final height = (isStamp ? 0.09 : 0.06) * scale;
-
+    final symbolColor = color ?? state.currentColor;
     final newMarkup = Markup(
       id: _uuid.v4(),
       drawingId: _drawingId,
       pageNumber: state.currentPage,
       layer: isStamp ? DrawingLayer.inspection : DrawingLayer.markup,
       type: isStamp ? MarkupType.stamp : MarkupType.text,
-      color: color,
-      strokeWidth: 2.0,
-      opacity: 1.0,
+      color: symbolColor,
+      strokeWidth: state.strokeWidth,
+      opacity: state.opacity,
       points: [position],
-      bounds: Rect.fromLTWH(position.x, position.y, width, height),
-      text: isStamp ? name : '[$tag] $name',
-      fontSize: 12.0 * scale,
+      bounds: Rect.fromLTWH(position.x, position.y, 0.08 * scale, 0.08 * scale),
+      text: tag.isNotEmpty ? tag : (name ?? 'SYM'),
+      rotation: rotation,
       metadata: {
         'symbolId': symbolId,
+        'name': name,
         'tag': tag,
         'scale': scale,
         'rotation': rotation,
         'isSymbol': true,
+        'isStamp': isStamp,
       },
       createdBy: 'Lead Field Engineer',
       createdAt: DateTime.now(),
@@ -899,9 +877,13 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
     _updateSelectedMarkupProperty((m) {
       final shiftedPoints = m.points.map((p) => Point2D(p.x + deltaNormalized.dx, p.y + deltaNormalized.dy)).toList();
       final shiftedBounds = m.bounds?.shift(deltaNormalized);
+      final shiftedLeader = m.leaderPoint != null
+          ? Point2D(m.leaderPoint!.x + deltaNormalized.dx, m.leaderPoint!.y + deltaNormalized.dy)
+          : null;
       return m.copyWith(
         points: shiftedPoints,
         bounds: shiftedBounds,
+        leaderPoint: shiftedLeader,
         updatedAt: DateTime.now(),
       );
     });
@@ -1035,26 +1017,18 @@ class MarkupController extends StateNotifier<DrawingViewerState> {
     _scheduleAutosave();
   }
 
-  // --- Eraser Helper ---
+  // --- High-Precision Stroke Eraser ---
 
   void _eraseNear(Point2D hit) {
-    const threshold = 0.03;
+    const threshold = 0.025; // 2.5% normalized radius
     final markupsOnPage = state.activePageMarkups;
     Markup? hitMarkup;
 
     for (final m in markupsOnPage.reversed) {
-      if (m.bounds != null && m.bounds!.inflate(threshold).contains(Offset(hit.x, hit.y))) {
+      if (StrokeSmoother.isMarkupHit(m, hit, threshold)) {
         hitMarkup = m;
         break;
       }
-      for (final p in m.points) {
-        final dist = (p.x - hit.x).abs() + (p.y - hit.y).abs();
-        if (dist < threshold) {
-          hitMarkup = m;
-          break;
-        }
-      }
-      if (hitMarkup != null) break;
     }
 
     if (hitMarkup != null) {

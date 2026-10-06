@@ -161,6 +161,7 @@ class Point2D {
 class Markup {
   final String id;
   final String drawingId;
+  final String? revisionId;
   final int pageNumber;
   final DrawingLayer layer;
   final MarkupType type;
@@ -173,6 +174,11 @@ class Markup {
   final String? text;
   final double? fontSize;
   final double? rotation; // in radians
+  final Point2D? leaderPoint; // Optional leader arrow target
+  final bool hasHalo; // Backdrop halo box for text readability
+  final String status; // 'Open', 'Addressed', 'Closed'
+  final int version; // Optimistic locking
+  final bool deleted;
   final Map<String, dynamic>? metadata;
   final String createdBy;
   final DateTime createdAt;
@@ -181,6 +187,7 @@ class Markup {
   const Markup({
     required this.id,
     required this.drawingId,
+    this.revisionId,
     this.pageNumber = 1,
     this.layer = DrawingLayer.markup,
     required this.type,
@@ -191,8 +198,13 @@ class Markup {
     this.points = const [],
     this.bounds,
     this.text,
-    this.fontSize = 14.0,
+    this.fontSize = 13.0,
     this.rotation = 0.0,
+    this.leaderPoint,
+    this.hasHalo = true,
+    this.status = 'Open',
+    this.version = 1,
+    this.deleted = false,
     this.metadata,
     required this.createdBy,
     required this.createdAt,
@@ -202,6 +214,7 @@ class Markup {
   Markup copyWith({
     String? id,
     String? drawingId,
+    String? revisionId,
     int? pageNumber,
     DrawingLayer? layer,
     MarkupType? type,
@@ -214,6 +227,11 @@ class Markup {
     String? text,
     double? fontSize,
     double? rotation,
+    Point2D? leaderPoint,
+    bool? hasHalo,
+    String? status,
+    int? version,
+    bool? deleted,
     Map<String, dynamic>? metadata,
     String? createdBy,
     DateTime? createdAt,
@@ -222,6 +240,7 @@ class Markup {
     return Markup(
       id: id ?? this.id,
       drawingId: drawingId ?? this.drawingId,
+      revisionId: revisionId ?? this.revisionId,
       pageNumber: pageNumber ?? this.pageNumber,
       layer: layer ?? this.layer,
       type: type ?? this.type,
@@ -234,6 +253,11 @@ class Markup {
       text: text ?? this.text,
       fontSize: fontSize ?? this.fontSize,
       rotation: rotation ?? this.rotation,
+      leaderPoint: leaderPoint ?? this.leaderPoint,
+      hasHalo: hasHalo ?? this.hasHalo,
+      status: status ?? this.status,
+      version: version ?? this.version,
+      deleted: deleted ?? this.deleted,
       metadata: metadata ?? this.metadata,
       createdBy: createdBy ?? this.createdBy,
       createdAt: createdAt ?? this.createdAt,
@@ -253,11 +277,14 @@ class Markup {
         },
       if (fontSize != null) 'fontSize': fontSize,
       if (rotation != null) 'rotation': rotation,
+      if (leaderPoint != null) 'leaderPoint': leaderPoint!.toMap(),
+      'hasHalo': hasHalo,
     };
 
     return {
       'id': id,
       'drawing_id': drawingId,
+      'revision_id': revisionId,
       'page_number': pageNumber,
       'layer': layer.name,
       'type': type.name,
@@ -267,6 +294,9 @@ class Markup {
       'opacity': opacity,
       'geometry_data': jsonEncode(geometryMap),
       'text': text,
+      'status': status,
+      'version': version,
+      'deleted': deleted ? 1 : 0,
       'metadata': metadata != null ? jsonEncode(metadata) : null,
       'created_by': createdBy,
       'created_at': createdAt.toIso8601String(),
@@ -298,6 +328,11 @@ class Markup {
       );
     }
 
+    Point2D? leaderPoint;
+    if (geometry['leaderPoint'] != null) {
+      leaderPoint = Point2D.fromMap(geometry['leaderPoint'] as Map<String, dynamic>);
+    }
+
     Map<String, dynamic>? metadata;
     if (map['metadata'] != null && map['metadata'].toString().isNotEmpty) {
       try {
@@ -307,8 +342,9 @@ class Markup {
 
     return Markup(
       id: map['id'] as String,
-      drawingId: map['drawing_id'] as String,
-      pageNumber: (map['page_number'] as num?)?.toInt() ?? 1,
+      drawingId: (map['drawing_id'] ?? map['drawingId']) as String? ?? '',
+      revisionId: (map['revision_id'] ?? map['revisionId']) as String?,
+      pageNumber: (map['page_number'] ?? map['pageNumber'] as num?)?.toInt() ?? 1,
       layer: DrawingLayer.values.firstWhere(
         (l) => l.name == map['layer'],
         orElse: () => DrawingLayer.markup,
@@ -318,18 +354,32 @@ class Markup {
         orElse: () => MarkupType.pen,
       ),
       color: Color((map['color'] as num?)?.toInt() ?? 0xFFFF0000),
-      fillColor: map['fill_color'] != null ? Color((map['fill_color'] as num).toInt()) : null,
-      strokeWidth: (map['stroke_width'] as num?)?.toDouble() ?? 2.0,
+      fillColor: map['fill_color'] != null || map['fillColor'] != null
+          ? Color(((map['fill_color'] ?? map['fillColor']) as num).toInt())
+          : null,
+      strokeWidth: ((map['stroke_width'] ?? map['strokeWidth']) as num?)?.toDouble() ?? 2.0,
       opacity: (map['opacity'] as num?)?.toDouble() ?? 1.0,
       points: pointsList,
       bounds: bounds,
       text: map['text'] as String?,
-      fontSize: (geometry['fontSize'] as num?)?.toDouble() ?? 14.0,
+      fontSize: (geometry['fontSize'] as num?)?.toDouble() ?? 13.0,
       rotation: (geometry['rotation'] as num?)?.toDouble() ?? 0.0,
+      leaderPoint: leaderPoint,
+      hasHalo: geometry['hasHalo'] as bool? ?? true,
+      status: map['status'] as String? ?? 'Open',
+      version: (map['version'] as num?)?.toInt() ?? 1,
+      deleted: (map['deleted'] == 1 || map['deleted'] == true),
       metadata: metadata,
-      createdBy: map['created_by'] as String? ?? 'Engineer',
-      createdAt: DateTime.tryParse(map['created_at'] as String? ?? '') ?? DateTime.now(),
-      updatedAt: DateTime.tryParse(map['updated_at'] as String? ?? '') ?? DateTime.now(),
+      createdBy: (map['created_by'] ?? map['createdBy']) as String? ?? 'Engineer',
+      createdAt: DateTime.tryParse((map['created_at'] ?? map['createdAt']) as String? ?? '') ??
+          DateTime.now(),
+      updatedAt: DateTime.tryParse((map['updated_at'] ?? map['updatedAt']) as String? ?? '') ??
+          DateTime.now(),
     );
   }
+
+  /// Convert to JSON format matching Quarkus backend REST API
+  Map<String, dynamic> toJson() => toMap();
+
+  factory Markup.fromJson(Map<String, dynamic> json) => Markup.fromMap(json);
 }

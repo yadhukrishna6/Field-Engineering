@@ -158,7 +158,7 @@ class _CalibrationDialogState extends State<CalibrationDialog> {
 
             try {
               final cal = await widget.controller.applyCalibration(dist, _selectedUnit);
-              if (context.mounted) {
+              if (context.mounted && cal != null) {
                 Navigator.of(context).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
