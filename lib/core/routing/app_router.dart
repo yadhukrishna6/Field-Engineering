@@ -27,6 +27,9 @@ import '../../features/ai/presentation/screens/ai_assistant_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/settings/presentation/screens/diagnostics_screen.dart';
 
+import '../../features/markup/domain/models/drawing_file.dart';
+import '../../features/markup/presentation/screens/drawings_list_screen.dart';
+import '../../features/markup/presentation/screens/markup_editor_screen.dart';
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
 final GoRouter appRouter = GoRouter(
@@ -104,6 +107,31 @@ final GoRouter appRouter = GoRouter(
             );
         return RevisionComparisonScreen(drawing: drawing);
       },
+    ),
+
+    // Screen: Dedicated Drawing Markup Feature
+    GoRoute(
+      path: '/markup',
+      builder: (context, state) => const DrawingsListScreen(),
+      routes: [
+        GoRoute(
+          path: ':id',
+          builder: (context, state) {
+            final extra = state.extra as DrawingFile?;
+            final id = state.pathParameters['id'] ?? '';
+            final drawing = extra ??
+                DrawingFile(
+                  id: id,
+                  name: 'Technical Drawing $id',
+                  fileType: 'PDF',
+                  pageCount: 1,
+                  localPath: 'assets/sample_drawings/pid_drawing_sample.pdf',
+                  createdAt: DateTime.now(),
+                );
+            return MarkupEditorScreen(drawing: drawing);
+          },
+        ),
+      ],
     ),
 
     // Screen 6: Field Issues & Punch List
