@@ -175,8 +175,7 @@ class _DrawingDetailScreenState extends ConsumerState<DrawingDetailScreen> {
                               return CustomPaint(
                                 size: size,
                                 painter: DrawingCanvasPainter(
-                                  strokes: _pageMarkup!.strokes,
-                                  labels: _pageMarkup!.labels,
+                                  annotations: _pageMarkup!.annotations,
                                   activeStrokePoints: const [],
                                   activeColor: AppColors.inkRed,
                                   activeStrokeWidth: 4.0,

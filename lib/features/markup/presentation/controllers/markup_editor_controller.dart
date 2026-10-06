@@ -1,182 +1,221 @@
-import '../../../../core/theme/app_colors.dart';
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../domain/models/annotation_item.dart';
 import '../../domain/models/drawing_file.dart';
+import '../../domain/models/markup_layer.dart';
 import '../../domain/models/page_markup.dart';
 import '../../domain/models/point_2d.dart';
+import '../../domain/models/snap_config.dart';
 import '../../domain/models/stroke.dart';
 import '../../domain/models/text_label.dart';
-import '../../domain/utils/stroke_smoother.dart';
 import '../../domain/repositories/markup_repository.dart';
+import '../../domain/utils/stroke_beautifier.dart';
 import 'drawings_list_controller.dart';
 
-const List<Color> kMarkupColorPresets = [
-  AppColors.inkRed,    // Red #C0452A
-  AppColors.inkBlue,   // Blue #185FA5
-  AppColors.inkDark,   // Dark #2C2C2A
-  AppColors.inkOrange, // Orange #E08A5B
-];
-
-const List<double> kStrokeWidthPresets = [
-  2.0, // Thin
-  4.0, // Medium
-  8.0, // Thick
-];
-
-enum MarkupTool { pen, text, eraser }
-
-/// Snapshot representing drawing markups state for undo/redo
-class MarkupSnapshot {
-  final List<Stroke> strokes;
-  final List<TextLabel> labels;
-
-  const MarkupSnapshot({
-    required this.strokes,
-    required this.labels,
-  });
+enum MarkupTool {
+  pen,
+  marker,
+  highlighter,
+  text,
+  shapes,
+  photo,
+  voiceNote,
+  more,
+  eraser,
 }
 
 class MarkupEditorState {
-  final DrawingFile drawing;
   final int currentPage;
+  final List<AnnotationItem> annotations;
   final MarkupTool selectedTool;
+  final AnnotationType selectedShape;
   final Color activeColor;
   final double activeStrokeWidth;
   final String activeLabelSize; // 'S' | 'M' | 'L'
-  final List<Stroke> strokes;
-  final List<TextLabel> labels;
-  final String? selectedLabelId;
+  final MarkupLayer activeLayer;
+  final Map<MarkupLayer, bool> layerVisibility;
+  final SnapConfig snapConfig;
+  final String? selectedAnnotationId;
+  final bool isLayersPanelOpen;
+  final bool isFullscreen;
+  final double zoomLevel; // 1.0 = 100%
   final List<Point2D> activeStrokePoints;
-  final List<MarkupSnapshot> undoStack;
-  final List<MarkupSnapshot> redoStack;
+  final List<Point2D>? snapGuideLine;
   final bool allowFingerDrawing;
+  final bool canUndo;
+  final bool canRedo;
   final bool isAutosaving;
   final bool hasUnsavedChanges;
-  final int version;
+  final String? lastSavedTimestamp;
 
   const MarkupEditorState({
-    required this.drawing,
-    this.currentPage = 1,
+    required this.currentPage,
+    this.annotations = const [],
     this.selectedTool = MarkupTool.pen,
+    this.selectedShape = AnnotationType.line,
     this.activeColor = AppColors.inkRed,
-    this.activeStrokeWidth = 4.0,
+    this.activeStrokeWidth = 3.0,
     this.activeLabelSize = 'M',
-    this.strokes = const [],
-    this.labels = const [],
-    this.selectedLabelId,
+    this.activeLayer = MarkupLayer.markups,
+    this.layerVisibility = const {},
+    this.snapConfig = const SnapConfig(),
+    this.selectedAnnotationId,
+    this.isLayersPanelOpen = false,
+    this.isFullscreen = false,
+    this.zoomLevel = 1.0,
     this.activeStrokePoints = const [],
-    this.undoStack = const [],
-    this.redoStack = const [],
+    this.snapGuideLine,
     this.allowFingerDrawing = true,
+    this.canUndo = false,
+    this.canRedo = false,
     this.isAutosaving = false,
     this.hasUnsavedChanges = false,
-    this.version = 1,
+    this.lastSavedTimestamp,
   });
 
-  bool get canUndo => undoStack.length > 1;
-  bool get canRedo => redoStack.isNotEmpty;
+  // Backward compatibility getters
+  List<Stroke> get strokes => annotations
+      .where((a) => a.type != AnnotationType.text && a.type != AnnotationType.photoPin && a.type != AnnotationType.voicePin)
+      .map((a) => Stroke(points: a.points, color: a.color, strokeWidth: a.strokeWidth))
+      .toList();
+
+  List<TextLabel> get labels => annotations
+      .where((a) => a.type == AnnotationType.text)
+      .map((a) => TextLabel(
+            id: a.id,
+            text: a.text ?? '',
+            x: a.points.isNotEmpty ? a.points.first.x : 0.0,
+            y: a.points.isNotEmpty ? a.points.first.y : 0.0,
+            size: a.size ?? 'M',
+            color: a.color,
+          ))
+      .toList();
+
+  String? get selectedLabelId => selectedAnnotationId;
 
   MarkupEditorState copyWith({
-    DrawingFile? drawing,
     int? currentPage,
+    List<AnnotationItem>? annotations,
     MarkupTool? selectedTool,
+    AnnotationType? selectedShape,
     Color? activeColor,
     double? activeStrokeWidth,
     String? activeLabelSize,
-    List<Stroke>? strokes,
-    List<TextLabel>? labels,
-    String? selectedLabelId,
-    bool clearSelectedLabel = false,
+    MarkupLayer? activeLayer,
+    Map<MarkupLayer, bool>? layerVisibility,
+    SnapConfig? snapConfig,
+    String? selectedAnnotationId,
+    bool? isLayersPanelOpen,
+    bool? isFullscreen,
+    double? zoomLevel,
     List<Point2D>? activeStrokePoints,
-    List<MarkupSnapshot>? undoStack,
-    List<MarkupSnapshot>? redoStack,
+    List<Point2D>? snapGuideLine,
     bool? allowFingerDrawing,
+    bool? canUndo,
+    bool? canRedo,
     bool? isAutosaving,
     bool? hasUnsavedChanges,
-    int? version,
+    String? lastSavedTimestamp,
+    bool clearSelectedId = false,
+    bool clearSnapGuide = false,
   }) {
     return MarkupEditorState(
-      drawing: drawing ?? this.drawing,
       currentPage: currentPage ?? this.currentPage,
+      annotations: annotations ?? this.annotations,
       selectedTool: selectedTool ?? this.selectedTool,
+      selectedShape: selectedShape ?? this.selectedShape,
       activeColor: activeColor ?? this.activeColor,
       activeStrokeWidth: activeStrokeWidth ?? this.activeStrokeWidth,
       activeLabelSize: activeLabelSize ?? this.activeLabelSize,
-      strokes: strokes ?? this.strokes,
-      labels: labels ?? this.labels,
-      selectedLabelId: clearSelectedLabel ? null : (selectedLabelId ?? this.selectedLabelId),
+      activeLayer: activeLayer ?? this.activeLayer,
+      layerVisibility: layerVisibility ?? this.layerVisibility,
+      snapConfig: snapConfig ?? this.snapConfig,
+      selectedAnnotationId: clearSelectedId ? null : (selectedAnnotationId ?? this.selectedAnnotationId),
+      isLayersPanelOpen: isLayersPanelOpen ?? this.isLayersPanelOpen,
+      isFullscreen: isFullscreen ?? this.isFullscreen,
+      zoomLevel: zoomLevel ?? this.zoomLevel,
       activeStrokePoints: activeStrokePoints ?? this.activeStrokePoints,
-      undoStack: undoStack ?? this.undoStack,
-      redoStack: redoStack ?? this.redoStack,
+      snapGuideLine: clearSnapGuide ? null : (snapGuideLine ?? this.snapGuideLine),
       allowFingerDrawing: allowFingerDrawing ?? this.allowFingerDrawing,
+      canUndo: canUndo ?? this.canUndo,
+      canRedo: canRedo ?? this.canRedo,
       isAutosaving: isAutosaving ?? this.isAutosaving,
       hasUnsavedChanges: hasUnsavedChanges ?? this.hasUnsavedChanges,
-      version: version ?? this.version,
+      lastSavedTimestamp: lastSavedTimestamp ?? this.lastSavedTimestamp,
     );
   }
 }
 
 class MarkupEditorController extends StateNotifier<MarkupEditorState> {
   final MarkupRepository _repository;
+  final DrawingFile _drawing;
+
+  final List<List<AnnotationItem>> _undoStack = [];
+  final List<List<AnnotationItem>> _redoStack = [];
+
   Timer? _autosaveDebounce;
+  Timer? _holdToBeautifyTimer;
 
-  MarkupEditorController(this._repository, DrawingFile drawing)
-      : super(MarkupEditorState(drawing: drawing)) {
-    loadPageMarkup(1);
+  MarkupEditorController(this._repository, this._drawing)
+      : super(MarkupEditorState(
+          currentPage: 1,
+          layerVisibility: {for (final l in MarkupLayer.values) l: true},
+        )) {
+    _loadPageMarkup(1);
   }
 
-  @override
-  void dispose() {
-    _autosaveDebounce?.cancel();
-    super.dispose();
-  }
+  Future<void> _loadPageMarkup(int page) async {
+    final pageMarkup = await _repository.getPageMarkup(_drawing.id, page);
+    final initialAnnotations = pageMarkup.annotations;
 
-  Future<void> loadPageMarkup(int pageNumber) async {
-    _scheduleAutosaveNow();
-    final markup = await _repository.getPageMarkup(state.drawing.id, pageNumber);
-    final initialSnapshot = MarkupSnapshot(
-      strokes: markup.strokes,
-      labels: markup.labels,
-    );
+    _undoStack.clear();
+    _redoStack.clear();
 
     state = state.copyWith(
-      currentPage: pageNumber,
-      strokes: markup.strokes,
-      labels: markup.labels,
-      selectedLabelId: null,
-      clearSelectedLabel: true,
-      activeStrokePoints: const [],
-      undoStack: [initialSnapshot],
-      redoStack: const [],
-      version: markup.version,
+      currentPage: page,
+      annotations: initialAnnotations,
+      canUndo: false,
+      canRedo: false,
       hasUnsavedChanges: false,
+      clearSelectedId: true,
+      clearSnapGuide: true,
     );
   }
 
-  void setPage(int page) {
-    if (page == state.currentPage || page < 1 || page > state.drawing.pageCount) return;
-    loadPageMarkup(page);
+  void _pushUndoSnapshot() {
+    _undoStack.add(List.from(state.annotations));
+    _redoStack.clear();
+    state = state.copyWith(canUndo: true, canRedo: false, hasUnsavedChanges: true);
+    _triggerAutosave();
   }
 
   void selectTool(MarkupTool tool) {
     state = state.copyWith(
       selectedTool: tool,
-      clearSelectedLabel: tool != MarkupTool.text,
+      clearSelectedId: tool != MarkupTool.text,
+      clearSnapGuide: true,
+    );
+  }
+
+  void selectShape(AnnotationType shape) {
+    state = state.copyWith(
+      selectedTool: MarkupTool.shapes,
+      selectedShape: shape,
     );
   }
 
   void setColor(Color color) {
     state = state.copyWith(activeColor: color);
-    // If a label is currently selected in text mode, update its color
-    if (state.selectedTool == MarkupTool.text && state.selectedLabelId != null) {
-      final updatedLabels = state.labels.map((l) {
-        if (l.id == state.selectedLabelId) {
-          return l.copyWith(color: color);
-        }
-        return l;
-      }).toList();
-      _pushSnapshot(state.strokes, updatedLabels);
+    if (state.selectedAnnotationId != null) {
+      final index = state.annotations.indexWhere((a) => a.id == state.selectedAnnotationId);
+      if (index != -1) {
+        _pushUndoSnapshot();
+        final updated = List<AnnotationItem>.from(state.annotations);
+        updated[index] = updated[index].copyWith(color: color);
+        state = state.copyWith(annotations: updated);
+      }
     }
   }
 
@@ -186,261 +225,357 @@ class MarkupEditorController extends StateNotifier<MarkupEditorState> {
 
   void setLabelSize(String size) {
     state = state.copyWith(activeLabelSize: size);
-    // If a label is currently selected in text mode, update its size
-    if (state.selectedTool == MarkupTool.text && state.selectedLabelId != null) {
-      final updatedLabels = state.labels.map((l) {
-        if (l.id == state.selectedLabelId) {
-          return l.copyWith(size: size);
-        }
-        return l;
-      }).toList();
-      _pushSnapshot(state.strokes, updatedLabels);
-    }
+  }
+
+  void setSnapConfig(SnapConfig config) {
+    state = state.copyWith(snapConfig: config);
+  }
+
+  void toggleLayer(MarkupLayer layer) {
+    final updated = Map<MarkupLayer, bool>.from(state.layerVisibility);
+    updated[layer] = !(updated[layer] ?? true);
+    state = state.copyWith(layerVisibility: updated);
+  }
+
+  void toggleLayersPanel() {
+    state = state.copyWith(isLayersPanelOpen: !state.isLayersPanelOpen);
+  }
+
+  void toggleFullscreen() {
+    state = state.copyWith(isFullscreen: !state.isFullscreen);
+  }
+
+  void setZoomLevel(double zoom) {
+    state = state.copyWith(zoomLevel: zoom);
   }
 
   void toggleFingerDrawing() {
     state = state.copyWith(allowFingerDrawing: !state.allowFingerDrawing);
   }
 
-  // --- Inking Actions ---
-
-  void startStroke(Point2D point) {
-    if (state.selectedTool != MarkupTool.pen) return;
-    state = state.copyWith(activeStrokePoints: [point]);
+  void selectAnnotation(String? id) {
+    state = state.copyWith(
+      selectedAnnotationId: id,
+      clearSelectedId: id == null,
+    );
   }
 
-  void appendStrokePoint(Point2D point) {
-    if (state.selectedTool != MarkupTool.pen || state.activeStrokePoints.isEmpty) return;
-    final updated = List<Point2D>.from(state.activeStrokePoints)..add(point);
+  void selectLabel(String? id) => selectAnnotation(id);
+
+  // --- Inking & Beautification Engine ---
+
+  void startStroke(Point2D p) {
+    state = state.copyWith(
+      activeStrokePoints: [p],
+      clearSnapGuide: true,
+    );
+
+    _holdToBeautifyTimer?.cancel();
+    // 500ms hold at the end of stroke auto-triggers beautification preview
+    _holdToBeautifyTimer = Timer(const Duration(milliseconds: 500), () {
+      _computeLiveSnapGuide();
+    });
+  }
+
+  void appendStrokePoint(Point2D p) {
+    final updated = List<Point2D>.from(state.activeStrokePoints)..add(p);
     state = state.copyWith(activeStrokePoints: updated);
+
+    _holdToBeautifyTimer?.cancel();
+    _holdToBeautifyTimer = Timer(const Duration(milliseconds: 500), () {
+      _computeLiveSnapGuide();
+    });
+  }
+
+  void _computeLiveSnapGuide() {
+    if (state.activeStrokePoints.length < 2 || !state.snapConfig.isEnabled) return;
+
+    final start = state.activeStrokePoints.first;
+    final end = state.activeStrokePoints.last;
+    final snapped = StrokeBeautifier.snapAngle(
+      origin: start,
+      target: end,
+      axisSet: state.snapConfig.axisSet,
+      toleranceDegrees: state.snapConfig.angleToleranceDegrees,
+    );
+
+    if (snapped.x != end.x || snapped.y != end.y) {
+      HapticFeedback.selectionClick();
+      state = state.copyWith(snapGuideLine: [start, snapped]);
+    }
   }
 
   void finishStroke() {
-    if (state.selectedTool != MarkupTool.pen || state.activeStrokePoints.isEmpty) {
-      state = state.copyWith(activeStrokePoints: const []);
-      return;
-    }
+    _holdToBeautifyTimer?.cancel();
+    if (state.activeStrokePoints.isEmpty) return;
 
-    // Simplify points using Ramer-Douglas-Peucker algorithm
-    final simplifiedPoints = StrokeSmoother.simplifyRDP(state.activeStrokePoints, epsilon: 0.0008);
-    final newStroke = Stroke(
-      points: simplifiedPoints,
+    _pushUndoSnapshot();
+
+    AnnotationType? forcedType;
+    if (state.selectedTool == MarkupTool.marker) forcedType = AnnotationType.marker;
+    if (state.selectedTool == MarkupTool.highlighter) forcedType = AnnotationType.highlighter;
+    if (state.selectedTool == MarkupTool.shapes) forcedType = state.selectedShape;
+
+    final beautified = StrokeBeautifier.beautify(
+      rawPoints: state.activeStrokePoints,
       color: state.activeColor,
       strokeWidth: state.activeStrokeWidth,
+      snapConfig: state.snapConfig,
+      layer: state.activeLayer,
+      forcedType: forcedType,
     );
 
-    final updatedStrokes = List<Stroke>.from(state.strokes)..add(newStroke);
-    state = state.copyWith(activeStrokePoints: const []);
-    _pushSnapshot(updatedStrokes, state.labels);
-  }
+    if (beautified.didSnap) {
+      HapticFeedback.lightImpact();
+    }
 
-  // --- Text Label Actions ---
-
-  void addLabel({
-    required String text,
-    required double x,
-    required double y,
-    String? size,
-    Color? color,
-  }) {
-    const labelId = 'lbl-';
-    final newLabel = TextLabel(
-      id: labelId,
-      text: text,
-      x: x.clamp(0.0, 0.95),
-      y: y.clamp(0.0, 0.95),
-      size: size ?? state.activeLabelSize,
-      color: color ?? state.activeColor,
+    final newAnnotation = AnnotationItem(
+      id: 'ann-${DateTime.now().microsecondsSinceEpoch}',
+      type: beautified.type,
+      layer: state.activeLayer,
+      color: state.activeColor,
+      strokeWidth: state.activeStrokeWidth,
+      points: beautified.points,
+      rawPoints: beautified.didSnap ? state.activeStrokePoints : null,
+      metadata: beautified.metadata,
     );
 
-    final updatedLabels = List<TextLabel>.from(state.labels)..add(newLabel);
-    state = state.copyWith(selectedLabelId: labelId);
-    _pushSnapshot(state.strokes, updatedLabels);
-  }
+    final updatedAnnotations = List<AnnotationItem>.from(state.annotations)..add(newAnnotation);
 
-  void selectLabel(String? id) {
     state = state.copyWith(
-      selectedLabelId: id,
-      clearSelectedLabel: id == null,
+      annotations: updatedAnnotations,
+      activeStrokePoints: const [],
+      clearSnapGuide: true,
     );
-  }
-
-  void moveLabel(String id, Point2D newPosition) {
-    final updatedLabels = state.labels.map((l) {
-      if (l.id == id) {
-        return l.copyWith(
-          x: newPosition.x.clamp(0.0, 0.95),
-          y: newPosition.y.clamp(0.0, 0.95),
-        );
-      }
-      return l;
-    }).toList();
-
-    state = state.copyWith(labels: updatedLabels, hasUnsavedChanges: true);
-    _scheduleAutosave();
-  }
-
-  void finishMoveLabel() {
-    _pushSnapshot(state.strokes, state.labels);
-  }
-
-  void deleteLabel(String id) {
-    final updatedLabels = state.labels.where((l) => l.id != id).toList();
-    state = state.copyWith(
-      clearSelectedLabel: state.selectedLabelId == id,
-    );
-    _pushSnapshot(state.strokes, updatedLabels);
-  }
-
-  void deleteSelectedLabel() {
-    if (state.selectedLabelId == null) return;
-    deleteLabel(state.selectedLabelId!);
   }
 
   // --- Whole Item Eraser ---
 
   bool eraseAt(Point2D hitPoint) {
-    bool erasedAny = false;
+    int hitIndex = -1;
 
-    // 1. Check labels hit (in reverse order for top-most first)
-    final remainingLabels = <TextLabel>[];
-    for (int i = state.labels.length - 1; i >= 0; i--) {
-      final label = state.labels[i];
-      if (!erasedAny && StrokeSmoother.isLabelHit(label, hitPoint)) {
-        erasedAny = true;
-        // Erased this label
-      } else {
-        remainingLabels.insert(0, label);
+    for (int i = state.annotations.length - 1; i >= 0; i--) {
+      final ann = state.annotations[i];
+      if (state.layerVisibility[ann.layer] == false) continue;
+
+      if (_isAnnotationHit(ann, hitPoint)) {
+        hitIndex = i;
+        break;
       }
     }
 
-    if (erasedAny) {
-      state = state.copyWith(clearSelectedLabel: true);
-      _pushSnapshot(state.strokes, remainingLabels);
+    if (hitIndex != -1) {
+      _pushUndoSnapshot();
+      final updated = List<AnnotationItem>.from(state.annotations)..removeAt(hitIndex);
+      state = state.copyWith(
+        annotations: updated,
+        clearSelectedId: true,
+      );
+      HapticFeedback.selectionClick();
       return true;
     }
+    return false;
+  }
 
-    // 2. Check strokes hit (in reverse order for top-most first)
-    final remainingStrokes = <Stroke>[];
-    for (int i = state.strokes.length - 1; i >= 0; i--) {
-      final stroke = state.strokes[i];
-      if (!erasedAny && StrokeSmoother.isStrokeHit(stroke, hitPoint, threshold: 0.025)) {
-        erasedAny = true;
-        // Erased this stroke
-      } else {
-        remainingStrokes.insert(0, stroke);
+  bool _isAnnotationHit(AnnotationItem ann, Point2D p) {
+    if (ann.points.isEmpty) return false;
+
+    if (ann.type == AnnotationType.text || ann.type == AnnotationType.callout) {
+      final origin = ann.points.first;
+      return (p.x >= origin.x - 0.04 && p.x <= origin.x + 0.18 &&
+              p.y >= origin.y - 0.04 && p.y <= origin.y + 0.08);
+    }
+
+    for (int i = 0; i < ann.points.length; i++) {
+      if ((p.x - ann.points[i].x).abs() < 0.025 && (p.y - ann.points[i].y).abs() < 0.025) {
+        return true;
       }
     }
 
-    if (erasedAny) {
-      _pushSnapshot(remainingStrokes, state.labels);
-      return true;
+    for (int i = 0; i < ann.points.length - 1; i++) {
+      final p1 = ann.points[i];
+      final p2 = ann.points[i + 1];
+      final dx = p2.x - p1.x;
+      final dy = p2.y - p1.y;
+      final lenSq = dx * dx + dy * dy;
+      if (lenSq == 0) continue;
+
+      final t = (((p.x - p1.x) * dx + (p.y - p1.y) * dy) / lenSq).clamp(0.0, 1.0);
+      final projX = p1.x + t * dx;
+      final projY = p1.y + t * dy;
+      final dist = (p.x - projX) * (p.x - projX) + (p.y - projY) * (p.y - projY);
+
+      if (dist < 0.0006) return true;
     }
 
     return false;
   }
 
-  // --- Snapshot & History Management ---
+  // --- Text Labels ---
 
-  void _pushSnapshot(List<Stroke> newStrokes, List<TextLabel> newLabels) {
-    final snapshot = MarkupSnapshot(
-      strokes: List.unmodifiable(newStrokes),
-      labels: List.unmodifiable(newLabels),
+  void addLabel({
+    required String text,
+    required double x,
+    required double y,
+    String size = 'M',
+    Color? color,
+  }) {
+    _pushUndoSnapshot();
+    final newAnnotation = AnnotationItem(
+      id: 'lbl-${DateTime.now().microsecondsSinceEpoch}',
+      type: AnnotationType.text,
+      layer: state.activeLayer,
+      color: color ?? state.activeColor,
+      strokeWidth: 1.5,
+      points: [Point2D(x, y)],
+      text: text,
+      size: size,
     );
 
-    final updatedUndo = List<MarkupSnapshot>.from(state.undoStack)..add(snapshot);
-    if (updatedUndo.length > 30) {
-      updatedUndo.removeAt(0);
-    }
-
+    final updated = List<AnnotationItem>.from(state.annotations)..add(newAnnotation);
     state = state.copyWith(
-      strokes: newStrokes,
-      labels: newLabels,
-      undoStack: updatedUndo,
-      redoStack: const [],
-      hasUnsavedChanges: true,
+      annotations: updated,
+      selectedAnnotationId: newAnnotation.id,
     );
-    _scheduleAutosave();
   }
 
-  // --- Undo & Redo ---
+  void moveAnnotation(String id, Point2D newPos) {
+    final index = state.annotations.indexWhere((a) => a.id == id);
+    if (index == -1) return;
+
+    final item = state.annotations[index];
+    final updated = List<AnnotationItem>.from(state.annotations);
+
+    if (item.type == AnnotationType.text || item.points.length == 1) {
+      updated[index] = item.copyWith(points: [newPos]);
+    } else if (item.points.isNotEmpty) {
+      final origin = item.points.first;
+      final dx = newPos.x - origin.x;
+      final dy = newPos.y - origin.y;
+      final shifted = item.points.map((p) => Point2D((p.x + dx).clamp(0.0, 1.0), (p.y + dy).clamp(0.0, 1.0))).toList();
+      updated[index] = item.copyWith(points: shifted);
+    }
+
+    state = state.copyWith(annotations: updated);
+  }
+
+  void moveLabel(String id, Point2D newPos) => moveAnnotation(id, newPos);
+
+  void finishMoveLabel() {
+    _triggerAutosave();
+    state = state.copyWith(hasUnsavedChanges: true, canUndo: true);
+  }
+
+  void deleteSelectedLabel() {
+    if (state.selectedAnnotationId == null) return;
+    _pushUndoSnapshot();
+    final updated = state.annotations.where((a) => a.id != state.selectedAnnotationId).toList();
+    state = state.copyWith(
+      annotations: updated,
+      clearSelectedId: true,
+    );
+  }
+
+  // --- Undo & Redo (Supports Single-Tap "Undo Snap") ---
 
   void undo() {
-    if (state.undoStack.length <= 1) return;
-    final current = state.undoStack.last;
-    final newUndo = List<MarkupSnapshot>.from(state.undoStack)..removeLast();
-    final prev = newUndo.last;
-    final newRedo = List<MarkupSnapshot>.from(state.redoStack)..add(current);
+    if (_undoStack.isEmpty) return;
+
+    // Check if the last annotation was snapped and can be restored to raw points
+    if (state.annotations.isNotEmpty && state.annotations.last.rawPoints != null) {
+      _redoStack.add(List.from(state.annotations));
+      final last = state.annotations.last;
+      final restored = last.copyWith(
+        type: AnnotationType.stroke,
+        points: last.rawPoints,
+        clearRawPoints: true,
+      );
+      final updated = List<AnnotationItem>.from(state.annotations)..removeLast()..add(restored);
+
+      state = state.copyWith(
+        annotations: updated,
+        canUndo: true,
+        canRedo: true,
+      );
+      _triggerAutosave();
+      return;
+    }
+
+    _redoStack.add(List.from(state.annotations));
+    final previous = _undoStack.removeLast();
 
     state = state.copyWith(
-      strokes: prev.strokes,
-      labels: prev.labels,
-      clearSelectedLabel: true,
-      undoStack: newUndo,
-      redoStack: newRedo,
-      hasUnsavedChanges: true,
+      annotations: previous,
+      canUndo: _undoStack.isNotEmpty,
+      canRedo: true,
+      clearSelectedId: true,
     );
-    _scheduleAutosave();
+
+    _triggerAutosave();
   }
 
   void redo() {
-    if (state.redoStack.isEmpty) return;
-    final next = state.redoStack.last;
-    final newRedo = List<MarkupSnapshot>.from(state.redoStack)..removeLast();
-    final newUndo = List<MarkupSnapshot>.from(state.undoStack)..add(next);
+    if (_redoStack.isEmpty) return;
+
+    _undoStack.add(List.from(state.annotations));
+    final next = _redoStack.removeLast();
 
     state = state.copyWith(
-      strokes: next.strokes,
-      labels: next.labels,
-      clearSelectedLabel: true,
-      undoStack: newUndo,
-      redoStack: newRedo,
-      hasUnsavedChanges: true,
+      annotations: next,
+      canUndo: true,
+      canRedo: _redoStack.isNotEmpty,
+      clearSelectedId: true,
     );
-    _scheduleAutosave();
+
+    _triggerAutosave();
   }
 
-  // --- Autosave ---
+  void setPage(int page) {
+    if (page == state.currentPage) return;
+    saveNow();
+    _loadPageMarkup(page);
+  }
 
-  void _scheduleAutosave() {
+  void _triggerAutosave() {
     _autosaveDebounce?.cancel();
-    _autosaveDebounce = Timer(const Duration(milliseconds: 600), () {
+    _autosaveDebounce = Timer(const Duration(milliseconds: 500), () {
       saveNow();
     });
   }
 
-  void _scheduleAutosaveNow() {
-    _autosaveDebounce?.cancel();
-    saveNow();
+  Future<void> saveNow() async {
+    state = state.copyWith(isAutosaving: true);
+    final pageMarkup = PageMarkup(
+      drawingId: _drawing.id,
+      pageNumber: state.currentPage,
+      annotations: state.annotations,
+      updatedAt: DateTime.now(),
+    );
+
+    await _repository.savePageMarkup(pageMarkup);
+
+    final now = DateTime.now();
+    final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+    state = state.copyWith(
+      isAutosaving: false,
+      hasUnsavedChanges: false,
+      lastSavedTimestamp: timeStr,
+    );
   }
 
-  Future<void> saveNow() async {
-    if (!state.hasUnsavedChanges) return;
-    state = state.copyWith(isAutosaving: true);
-    try {
-      final markup = PageMarkup(
-        drawingId: state.drawing.id,
-        pageNumber: state.currentPage,
-        strokes: state.strokes,
-        labels: state.labels,
-        version: state.version,
-        updatedAt: DateTime.now(),
-      );
-      await _repository.savePageMarkup(markup);
-      state = state.copyWith(
-        isAutosaving: false,
-        hasUnsavedChanges: false,
-        version: state.version + 1,
-      );
-    } catch (e) {
-      debugPrint('Autosave error: ');
-      state = state.copyWith(isAutosaving: false);
-    }
+  @override
+  void dispose() {
+    _autosaveDebounce?.cancel();
+    _holdToBeautifyTimer?.cancel();
+    super.dispose();
   }
 }
 
-final markupEditorControllerProvider =
-    StateNotifierProvider.family<MarkupEditorController, MarkupEditorState, DrawingFile>((ref, drawing) {
-  final repo = ref.watch(markupRepositoryProvider);
-  return MarkupEditorController(repo, drawing);
-});
+final markupEditorControllerProvider = StateNotifierProvider.autoDispose.family<
+    MarkupEditorController, MarkupEditorState, DrawingFile>(
+  (ref, drawing) {
+    final repo = ref.watch(markupRepositoryProvider);
+    return MarkupEditorController(repo, drawing);
+  },
+);

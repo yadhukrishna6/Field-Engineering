@@ -1,21 +1,25 @@
-import 'dart:ui';
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:printing/printing.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../domain/models/annotation_item.dart';
 import '../../domain/models/drawing_file.dart';
+import '../../domain/models/markup_layer.dart';
 import '../../domain/models/point_2d.dart';
-import '../../domain/models/text_label.dart';
 import '../../domain/utils/markup_pdf_exporter.dart';
-import '../../domain/utils/stroke_smoother.dart';
 import '../controllers/drawings_list_controller.dart';
 import '../controllers/markup_editor_controller.dart';
 import '../widgets/add_label_sheet.dart';
 import '../widgets/drawing_canvas_painter.dart';
+import '../widgets/layers_panel.dart';
 import '../widgets/markup_bottom_toolbar.dart';
+import '../widgets/minimap_view.dart';
+import '../widgets/shapes_selection_popup.dart';
+import '../widgets/snap_settings_chip.dart';
 
 class MarkupEditorScreen extends ConsumerStatefulWidget {
   final DrawingFile drawing;
@@ -34,7 +38,18 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
   final GlobalKey _canvasKey = GlobalKey();
 
   Point2D? _pointerDownPoint;
-  bool _isDraggingLabel = false;
+  bool _isDraggingAnnotation = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _transformationController.addListener(_onTransformChanged);
+  }
+
+  void _onTransformChanged() {
+    final scale = _transformationController.value.getMaxScaleOnAxis();
+    ref.read(markupEditorControllerProvider(widget.drawing).notifier).setZoomLevel(scale);
+  }
 
   Point2D _screenToPage(Offset globalPos) {
     final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
@@ -46,7 +61,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
     );
   }
 
-  void _handleDoubleTapReset() {
+  void _handleResetZoom() {
     final currentScale = _transformationController.value.getMaxScaleOnAxis();
     if (currentScale > 1.2) {
       _transformationController.value = Matrix4.identity();
@@ -55,11 +70,22 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
     }
   }
 
+  void _showShapesPopup(BuildContext context, MarkupEditorState state, MarkupEditorController controller) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => ShapesSelectionPopup(
+        currentShape: state.selectedShape,
+        onSelectShape: (shape) => controller.selectShape(shape),
+      ),
+    );
+  }
+
   Future<void> _exportPdf() async {
     try {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Generating client-ready Vector PDF with engineering font...'),
+          content: Text('Generating client-ready Vector PDF with embedded markups...'),
           duration: Duration(seconds: 1),
         ),
       );
@@ -85,6 +111,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
 
   @override
   void dispose() {
+    _transformationController.removeListener(_onTransformChanged);
     _transformationController.dispose();
     super.dispose();
   }
@@ -95,128 +122,285 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
     final controller = ref.read(markupEditorControllerProvider(widget.drawing).notifier);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
-    final isTabletOrDesktop = screenWidth >= 768;
+    final isTabletLandscape = screenWidth >= 768;
     final primaryColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.drawing.name,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            Row(
-              children: [
-                if (widget.drawing.pageCount > 1) ...[
+      appBar: state.isFullscreen
+          ? null
+          : AppBar(
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    'Page ${state.currentPage} of ${widget.drawing.pageCount}',
-                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    widget.drawing.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(width: 8),
+                  Row(
+                    children: [
+                      if (widget.drawing.pageCount > 1) ...[
+                        Text(
+                          'Page ${state.currentPage} of ${widget.drawing.pageCount}',
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Text(
+                        state.isAutosaving
+                            ? 'Saving...'
+                            : (state.hasUnsavedChanges ? 'Edited' : 'Saved'),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: state.isAutosaving ? Colors.amber : Colors.greenAccent,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
-                Text(
-                  state.isAutosaving
-                      ? 'Saving...'
-                      : (state.hasUnsavedChanges ? 'Edited' : 'Saved'),
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: state.isAutosaving ? Colors.amber : Colors.greenAccent,
+              ),
+              actions: [
+                if (widget.drawing.pageCount > 1) ...[
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left_rounded),
+                    tooltip: 'Previous Sheet',
+                    onPressed: state.currentPage > 1 ? () => controller.setPage(state.currentPage - 1) : null,
+                  ),
+                  Center(
+                    child: Text(
+                      '${state.currentPage}/${widget.drawing.pageCount}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right_rounded),
+                    tooltip: 'Next Sheet',
+                    onPressed: state.currentPage < widget.drawing.pageCount ? () => controller.setPage(state.currentPage + 1) : null,
+                  ),
+                ],
+                IconButton(
+                  icon: Icon(Icons.picture_as_pdf_rounded, color: primaryColor),
+                  tooltip: 'Export Vector PDF',
+                  onPressed: _exportPdf,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.save_rounded),
+                  tooltip: 'Save Markups',
+                  onPressed: () => controller.saveNow(),
+                ),
+              ],
+            ),
+      body: Column(
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                // Left Tool Rail (Tablet Landscape & Desktop)
+                if (isTabletLandscape)
+                  _buildLeftToolRail(context, state, controller, isDark),
+
+                // Main Canvas Area with Overlays
+                Expanded(
+                  child: Stack(
+                    children: [
+                      // Interactive Drawing Canvas
+                      Positioned.fill(
+                        child: _buildCanvasArea(state, controller, isDark),
+                      ),
+
+                      // Top-Left Smart Snap Chip
+                      Positioned(
+                        left: 12,
+                        top: 12,
+                        child: SnapSettingsChip(
+                          snapConfig: state.snapConfig,
+                          onConfigChanged: (cfg) => controller.setSnapConfig(cfg),
+                        ),
+                      ),
+
+                      // Top-Right Collapsible Layers Panel
+                      if (state.isLayersPanelOpen)
+                        Positioned(
+                          right: 12,
+                          top: 12,
+                          child: LayersPanel(
+                            layerVisibility: state.layerVisibility,
+                            onToggleLayer: (l) => controller.toggleLayer(l),
+                            onClose: () => controller.toggleLayersPanel(),
+                          ),
+                        ),
+
+                      // Bottom-Right Floating Minimap
+                      Positioned(
+                        right: 12,
+                        bottom: 12,
+                        child: MinimapView(
+                          transformationController: _transformationController,
+                          drawing: widget.drawing,
+                          onResetZoom: _handleResetZoom,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ],
-        ),
-        actions: [
-          // Multi-page navigation for PDFs
-          if (widget.drawing.pageCount > 1) ...[
-            IconButton(
-              icon: const Icon(Icons.chevron_left_rounded),
-              tooltip: 'Previous Sheet',
-              onPressed: state.currentPage > 1
-                  ? () => controller.setPage(state.currentPage - 1)
-                  : null,
-            ),
-            Center(
-              child: Text(
-                '${state.currentPage}/${widget.drawing.pageCount}',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.chevron_right_rounded),
-              tooltip: 'Next Sheet',
-              onPressed: state.currentPage < widget.drawing.pageCount
-                  ? () => controller.setPage(state.currentPage + 1)
-                  : null,
-            ),
-          ],
-
-          // Undo
-          IconButton(
-            icon: const Icon(Icons.undo_rounded),
-            tooltip: 'Undo',
-            onPressed: state.canUndo ? () => controller.undo() : null,
           ),
 
-          // Redo
-          IconButton(
-            icon: const Icon(Icons.redo_rounded),
-            tooltip: 'Redo',
-            onPressed: state.canRedo ? () => controller.redo() : null,
-          ),
+          // Phone Tools Rail / Bottom Bar
+          if (!isTabletLandscape)
+            _buildPhoneToolRail(context, state, controller, isDark),
 
-          // PDF Vector Export
-          IconButton(
-            icon: Icon(Icons.picture_as_pdf_rounded, color: primaryColor),
-            tooltip: 'Export Vector PDF',
-            onPressed: _exportPdf,
-          ),
-
-          // Force Save
-          IconButton(
-            icon: const Icon(Icons.save_rounded),
-            tooltip: 'Save Markups',
-            onPressed: () => controller.saveNow(),
+          // Bottom Bar (Layers toggle, 7 color dots, stroke slider, undo/redo, zoom %, fullscreen)
+          MarkupBottomToolbar(
+            state: state,
+            controller: controller,
+            onResetZoom: _handleResetZoom,
           ),
         ],
       ),
-      body: isTabletOrDesktop
-          ? Row(
-              children: [
-                MarkupBottomToolbar(
-                  state: state,
-                  controller: controller,
-                  isVerticalRail: true,
-                ),
-                Expanded(
-                  child: _buildCanvasArea(state, controller, isDark),
-                ),
-              ],
-            )
-          : Stack(
-              children: [
-                Positioned.fill(
-                  child: _buildCanvasArea(state, controller, isDark),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: MarkupBottomToolbar(
-                    state: state,
-                    controller: controller,
-                    isVerticalRail: false,
+    );
+  }
+
+  Widget _buildLeftToolRail(
+    BuildContext context,
+    MarkupEditorState state,
+    MarkupEditorController controller,
+    bool isDark,
+  ) {
+    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+    final outlineColor = isDark ? AppColors.darkOutline : AppColors.lightOutline;
+    final textColor = isDark ? AppColors.darkText : AppColors.lightText;
+    final primaryColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
+
+    final tools = [
+      {'tool': MarkupTool.pen, 'icon': Icons.edit_rounded, 'label': 'Pen'},
+      {'tool': MarkupTool.marker, 'icon': Icons.border_color_rounded, 'label': 'Marker'},
+      {'tool': MarkupTool.highlighter, 'icon': Icons.highlight_rounded, 'label': 'Highlighter'},
+      {'tool': MarkupTool.text, 'icon': Icons.text_fields_rounded, 'label': 'Text'},
+      {'tool': MarkupTool.shapes, 'icon': Icons.category_rounded, 'label': 'Shapes'},
+      {'tool': MarkupTool.photo, 'icon': Icons.camera_alt_rounded, 'label': 'Photo'},
+      {'tool': MarkupTool.voiceNote, 'icon': Icons.mic_rounded, 'label': 'Voice'},
+      {'tool': MarkupTool.eraser, 'icon': Icons.auto_fix_high_rounded, 'label': 'Eraser'},
+    ];
+
+    return Container(
+      width: 76,
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        border: Border(right: BorderSide(color: outlineColor, width: 1.0)),
+      ),
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        children: tools.map((t) {
+          final tool = t['tool'] as MarkupTool;
+          final isSelected = state.selectedTool == tool;
+
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: InkWell(
+              onTap: () {
+                if (tool == MarkupTool.shapes) {
+                  _showShapesPopup(context, state, controller);
+                } else {
+                  controller.selectTool(tool);
+                }
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? primaryColor.withOpacity(0.18) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isSelected ? primaryColor : Colors.transparent,
+                    width: 1.2,
                   ),
                 ),
-              ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      t['icon'] as IconData,
+                      size: 22,
+                      color: isSelected ? primaryColor : textColor,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      t['label'] as String,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: isSelected ? primaryColor : textColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildPhoneToolRail(
+    BuildContext context,
+    MarkupEditorState state,
+    MarkupEditorController controller,
+    bool isDark,
+  ) {
+    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+    final outlineColor = isDark ? AppColors.darkOutline : AppColors.lightOutline;
+    final textColor = isDark ? AppColors.darkText : AppColors.lightText;
+    final primaryColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
+
+    final tools = [
+      {'tool': MarkupTool.pen, 'icon': Icons.edit_rounded, 'label': 'Pen'},
+      {'tool': MarkupTool.marker, 'icon': Icons.border_color_rounded, 'label': 'Marker'},
+      {'tool': MarkupTool.highlighter, 'icon': Icons.highlight_rounded, 'label': 'Highlighter'},
+      {'tool': MarkupTool.text, 'icon': Icons.text_fields_rounded, 'label': 'Text'},
+      {'tool': MarkupTool.shapes, 'icon': Icons.category_rounded, 'label': 'Shapes'},
+      {'tool': MarkupTool.photo, 'icon': Icons.camera_alt_rounded, 'label': 'Photo'},
+      {'tool': MarkupTool.voiceNote, 'icon': Icons.mic_rounded, 'label': 'Voice'},
+      {'tool': MarkupTool.eraser, 'icon': Icons.auto_fix_high_rounded, 'label': 'Eraser'},
+    ];
+
+    return Container(
+      color: surfaceColor,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: outlineColor, width: 0.5)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: tools.map((t) {
+            final tool = t['tool'] as MarkupTool;
+            final isSelected = state.selectedTool == tool;
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: ChoiceChip(
+                avatar: Icon(t['icon'] as IconData, size: 16, color: isSelected ? primaryColor : textColor),
+                label: Text(t['label'] as String),
+                selected: isSelected,
+                selectedColor: primaryColor.withOpacity(0.18),
+                onSelected: (_) {
+                  if (tool == MarkupTool.shapes) {
+                    _showShapesPopup(context, state, controller);
+                  } else {
+                    controller.selectTool(tool);
+                  }
+                },
+              ),
+            );
+          }).toList(),
+        ),
+      ),
     );
   }
 
@@ -225,8 +409,10 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
     MarkupEditorController controller,
     bool isDark,
   ) {
+    final showOriginal = state.layerVisibility[MarkupLayer.originalDrawing] ?? true;
+
     return GestureDetector(
-      onDoubleTap: _handleDoubleTapReset,
+      onDoubleTap: _handleResetZoom,
       child: InteractiveViewer(
         transformationController: _transformationController,
         minScale: 0.5,
@@ -246,26 +432,31 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                 final p = _screenToPage(event.position);
                 _pointerDownPoint = p;
 
-                if (state.selectedTool == MarkupTool.pen) {
-                  controller.startStroke(p);
-                } else if (state.selectedTool == MarkupTool.eraser) {
+                if (state.selectedTool == MarkupTool.eraser) {
                   controller.eraseAt(p);
                 } else if (state.selectedTool == MarkupTool.text) {
-                  TextLabel? hitLabel;
-                  for (int i = state.labels.length - 1; i >= 0; i--) {
-                    if (StrokeSmoother.isLabelHit(state.labels[i], p)) {
-                      hitLabel = state.labels[i];
-                      break;
+                  AnnotationItem? hitItem;
+                  for (int i = state.annotations.length - 1; i >= 0; i--) {
+                    final a = state.annotations[i];
+                    if (a.type == AnnotationType.text && a.points.isNotEmpty) {
+                      final origin = a.points.first;
+                      if (p.x >= origin.x - 0.04 && p.x <= origin.x + 0.18 &&
+                          p.y >= origin.y - 0.04 && p.y <= origin.y + 0.08) {
+                        hitItem = a;
+                        break;
+                      }
                     }
                   }
 
-                  if (hitLabel != null) {
-                    controller.selectLabel(hitLabel.id);
-                    _isDraggingLabel = true;
+                  if (hitItem != null) {
+                    controller.selectAnnotation(hitItem.id);
+                    _isDraggingAnnotation = true;
                   } else {
-                    controller.selectLabel(null);
-                    _isDraggingLabel = false;
+                    controller.selectAnnotation(null);
+                    _isDraggingAnnotation = false;
                   }
+                } else {
+                  controller.startStroke(p);
                 }
               },
               onPointerMove: (event) {
@@ -275,28 +466,26 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
 
                 final p = _screenToPage(event.position);
 
-                if (state.selectedTool == MarkupTool.pen) {
-                  controller.appendStrokePoint(p);
-                } else if (state.selectedTool == MarkupTool.eraser) {
+                if (state.selectedTool == MarkupTool.eraser) {
                   controller.eraseAt(p);
                 } else if (state.selectedTool == MarkupTool.text) {
-                  if (_isDraggingLabel && state.selectedLabelId != null) {
-                    controller.moveLabel(state.selectedLabelId!, p);
+                  if (_isDraggingAnnotation && state.selectedAnnotationId != null) {
+                    controller.moveAnnotation(state.selectedAnnotationId!, p);
                   }
+                } else {
+                  controller.appendStrokePoint(p);
                 }
               },
               onPointerUp: (event) {
                 final p = _screenToPage(event.position);
 
-                if (state.selectedTool == MarkupTool.pen) {
-                  controller.finishStroke();
-                } else if (state.selectedTool == MarkupTool.text) {
-                  if (_isDraggingLabel) {
-                    _isDraggingLabel = false;
+                if (state.selectedTool == MarkupTool.text) {
+                  if (_isDraggingAnnotation) {
+                    _isDraggingAnnotation = false;
                     controller.finishMoveLabel();
                   } else if (_pointerDownPoint != null) {
                     final dist = (p.x - _pointerDownPoint!.x).abs() + (p.y - _pointerDownPoint!.y).abs();
-                    if (dist < 0.02 && state.selectedLabelId == null) {
+                    if (dist < 0.02 && state.selectedAnnotationId == null) {
                       AddLabelSheet.show(
                         context,
                         initialColor: state.activeColor,
@@ -313,13 +502,15 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                       );
                     }
                   }
+                } else if (state.selectedTool != MarkupTool.eraser) {
+                  controller.finishStroke();
                 }
                 _pointerDownPoint = null;
               },
               child: Container(
                 key: _canvasKey,
                 decoration: BoxDecoration(
-                  color: AppColors.canvasPaper, // Pure white paper background in BOTH light & dark modes
+                  color: AppColors.canvasPaper, // Stays pure white in BOTH themes
                   borderRadius: BorderRadius.circular(4),
                   boxShadow: const [
                     BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 4)),
@@ -328,22 +519,30 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // Base Blueprint / Image Layer
-                    _buildBaseLayer(widget.drawing),
+                    // Original Blueprint Layer (respects layer visibility)
+                    if (showOriginal)
+                      _buildBaseLayer(widget.drawing),
 
-                    // Custom Vector Pen & Text Markup Layer
+                    // Custom Vector Inking & Annotation Layer
                     LayoutBuilder(
                       builder: (context, constraints) {
                         final size = Size(constraints.maxWidth, constraints.maxHeight);
+                        AnnotationType currentToolType = AnnotationType.stroke;
+                        if (state.selectedTool == MarkupTool.marker) currentToolType = AnnotationType.marker;
+                        if (state.selectedTool == MarkupTool.highlighter) currentToolType = AnnotationType.highlighter;
+                        if (state.selectedTool == MarkupTool.shapes) currentToolType = state.selectedShape;
+
                         return CustomPaint(
                           size: size,
                           painter: DrawingCanvasPainter(
-                            strokes: state.strokes,
-                            labels: state.labels,
-                            selectedLabelId: state.selectedLabelId,
+                            annotations: state.annotations,
+                            layerVisibility: state.layerVisibility,
+                            selectedAnnotationId: state.selectedAnnotationId,
                             activeStrokePoints: state.activeStrokePoints,
                             activeColor: state.activeColor,
                             activeStrokeWidth: state.activeStrokeWidth,
+                            activeToolType: currentToolType,
+                            snapGuideLine: state.snapGuideLine,
                             canvasSize: size,
                           ),
                         );

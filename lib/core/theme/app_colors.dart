@@ -25,19 +25,29 @@ class AppColors {
   static const Color darkChip = Color(0xFF35281F);
   static const Color darkAccent = Color(0xFF8A6A35);
 
-  // --- Markup Inking Color Presets (Strictly Preserved) ---
-  static const Color inkRed = Color(0xFFC0452A);
-  static const Color inkBlue = Color(0xFF185FA5);
+  // --- Reference-Style 7 Preset Dots ---
+  static const Color inkRed = Color(0xFFD03A33);       // Revision / Modify
+  static const Color inkBlue = Color(0xFF185FA5);      // Check / Verify
+  static const Color inkGreen = Color(0xFF2E8B3E);     // Dimension / Measurement
+  static const Color inkOrange = Color(0xFFEF9F27);    // Add / New
+  static const Color inkYellow = Color(0xFFF2D13A);
+  static const Color inkPurple = Color(0xFF7A3FB5);
   static const Color inkDark = Color(0xFF2C2C2A);
-  static const Color inkOrange = Color(0xFFE08A5B);
 
   // --- Paper Canvas Color (Stays pure white in BOTH modes) ---
   static const Color canvasPaper = Color(0xFFFFFFFF);
 }
 
-const List<Color> kDesertMarkupColors = [
+const List<Color> kReferenceColorPresets = [
   AppColors.inkRed,
   AppColors.inkBlue,
-  AppColors.inkDark,
+  AppColors.inkGreen,
   AppColors.inkOrange,
+  AppColors.inkYellow,
+  AppColors.inkPurple,
+  AppColors.inkDark,
 ];
+
+// Preserved for legacy compatibility
+const List<Color> kMarkupColorPresets = kReferenceColorPresets;
+const List<Color> kDesertMarkupColors = kReferenceColorPresets;

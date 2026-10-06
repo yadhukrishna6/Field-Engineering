@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:field_engineering/features/markup/domain/models/annotation_item.dart';
 import 'package:field_engineering/features/markup/domain/models/point_2d.dart';
 import 'package:field_engineering/features/markup/domain/models/drawing_file.dart';
 import 'package:field_engineering/features/markup/domain/models/page_markup.dart';
@@ -116,7 +117,8 @@ void main() {
       controller = MarkupEditorController(repo, testDrawing);
     });
 
-    test('Inking a stroke updates active page strokes and enables Undo', () {
+    test('Inking a stroke updates active page strokes and enables Undo', () async {
+      await Future.delayed(const Duration(milliseconds: 10));
       expect(controller.state.strokes.isEmpty, isTrue);
       expect(controller.state.canUndo, isFalse);
 
@@ -129,21 +131,44 @@ void main() {
       expect(controller.state.canRedo, isFalse);
     });
 
-    test('Undo removes the last stroke, Redo restores it', () {
+    test('Undo removes unsnapped stroke and Redo restores it', () async {
+      await Future.delayed(const Duration(milliseconds: 10));
       controller.startStroke(const Point2D(0.1, 0.1));
       controller.appendStrokePoint(const Point2D(0.2, 0.2));
       controller.finishStroke();
 
       expect(controller.state.strokes.length, equals(1));
 
-      // Undo
+      // Undo removes the unsnapped stroke
       controller.undo();
       expect(controller.state.strokes.isEmpty, isTrue);
       expect(controller.state.canRedo, isTrue);
 
-      // Redo
+      // Redo restores it
       controller.redo();
       expect(controller.state.strokes.length, equals(1));
+    });
+
+    test('Undo snap: snapped horizontal stroke reverts to raw freehand before deletion', () async {
+      await Future.delayed(const Duration(milliseconds: 10));
+      // Draw horizontal line that triggers 0 deg snap
+      controller.startStroke(const Point2D(0.1, 0.5));
+      controller.appendStrokePoint(const Point2D(0.25, 0.502));
+      controller.appendStrokePoint(const Point2D(0.4, 0.499));
+      controller.finishStroke();
+
+      expect(controller.state.strokes.length, equals(1));
+      expect(controller.state.annotations.last.rawPoints, isNotNull);
+
+      // First Undo: Restores raw hand-drawn stroke (Undo snap)
+      controller.undo();
+      expect(controller.state.strokes.length, equals(1));
+      expect(controller.state.annotations.last.type, equals(AnnotationType.stroke));
+
+      // Second Undo: Removes the stroke completely
+      controller.undo();
+      expect(controller.state.strokes.isEmpty, isTrue);
+      expect(controller.state.canRedo, isTrue);
     });
 
     test('Switching pages loads page-specific markups', () async {

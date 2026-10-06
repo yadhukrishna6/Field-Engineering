@@ -88,7 +88,7 @@ void main() {
         color: Color(0xFF34C759),
       );
 
-      const markup = PageMarkup(
+      final markup = PageMarkup(
         drawingId: 'dwg-101',
         pageNumber: 2,
         strokes: [stroke],

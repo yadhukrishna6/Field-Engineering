@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../controllers/markup_editor_controller.dart';
 
 class AddLabelSheet extends StatefulWidget {
   final Color initialColor;
