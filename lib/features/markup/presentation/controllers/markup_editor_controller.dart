@@ -242,7 +242,7 @@ class MarkupEditorController extends StateNotifier<MarkupEditorState> {
     String? size,
     Color? color,
   }) {
-    final labelId = 'lbl-';
+    const labelId = 'lbl-';
     final newLabel = TextLabel(
       id: labelId,
       text: text,

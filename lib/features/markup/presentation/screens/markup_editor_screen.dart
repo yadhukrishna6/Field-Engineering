@@ -70,13 +70,13 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
       );
       await Printing.sharePdf(
         bytes: pdfBytes,
-        filename: '\_markup.pdf',
+        filename: '${widget.drawing.name}_markup.pdf',
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Export failed: '),
+          content: Text('Export failed: $e'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -113,7 +113,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
               children: [
                 if (widget.drawing.pageCount > 1) ...[
                   Text(
-                    'Page \ of ',
+                    'Page ${state.currentPage} of ${widget.drawing.pageCount}',
                     style: const TextStyle(fontSize: 11, color: Colors.grey),
                   ),
                   const SizedBox(width: 8),
@@ -144,7 +144,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
             ),
             Center(
               child: Text(
-                '\/',
+                '${state.currentPage}/${widget.drawing.pageCount}',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
             ),
@@ -363,7 +363,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
         dynamicLayout: false,
         maxPageWidth: 1600,
         loadingWidget: const Center(child: CircularProgressIndicator(color: AppColors.safetyOrange)),
-        pdfFileName: '\.pdf',
+        pdfFileName: '${drawing.name}.pdf',
       );
     } else {
       if (!kIsWeb && File(path).existsSync()) {

@@ -46,13 +46,13 @@ void main() {
 
   group('Phase 2 - TextLabel and PageMarkup Models', () {
     test('TextLabel JSON serialization and S/M/L fontSize mappings', () {
-      final labelS = TextLabel(
+      const labelS = TextLabel(
         id: 'lbl-1',
         text: 'Tie-in Point #4',
         x: 0.25,
         y: 0.50,
         size: 'S',
-        color: const Color(0xFFFF3B30),
+        color: Color(0xFFFF3B30),
       );
 
       expect(labelS.fontSize, equals(11.0));
@@ -74,21 +74,21 @@ void main() {
     });
 
     test('PageMarkup payload JSON serialization preserves strokes and labels', () {
-      final stroke = Stroke(
-        points: const [Point2D(0.1, 0.1), Point2D(0.2, 0.2)],
-        color: const Color(0xFF007AFF),
+      const stroke = Stroke(
+        points: [Point2D(0.1, 0.1), Point2D(0.2, 0.2)],
+        color: Color(0xFF007AFF),
         strokeWidth: 4.0,
       );
-      final label = TextLabel(
+      const label = TextLabel(
         id: 'lbl-10',
         text: '4" FLANGE REVISION',
         x: 0.3,
         y: 0.4,
         size: 'L',
-        color: const Color(0xFF34C759),
+        color: Color(0xFF34C759),
       );
 
-      final markup = PageMarkup(
+      const markup = PageMarkup(
         drawingId: 'dwg-101',
         pageNumber: 2,
         strokes: [stroke],
@@ -110,9 +110,9 @@ void main() {
 
   group('Phase 2 - Hit Testing (Whole Item Eraser and Selection)', () {
     test('isStrokeHit detects points close to line segment', () {
-      final stroke = Stroke(
-        points: const [Point2D(0.1, 0.1), Point2D(0.5, 0.5)],
-        color: const Color(0xFFFF3B30),
+      const stroke = Stroke(
+        points: [Point2D(0.1, 0.1), Point2D(0.5, 0.5)],
+        color: Color(0xFFFF3B30),
         strokeWidth: 4.0,
       );
 
@@ -127,7 +127,7 @@ void main() {
     });
 
     test('isLabelHit detects point within label bounds', () {
-      final label = TextLabel(
+      const label = TextLabel(
         id: 'lbl-1',
         text: 'ISO-VALVE-01',
         x: 0.2,
@@ -249,15 +249,15 @@ void main() {
         PageMarkup(
           drawingId: drawing.id,
           pageNumber: 1,
-          strokes: [
+          strokes: const [
             Stroke(
-              points: const [Point2D(0.1, 0.1), Point2D(0.4, 0.4)],
-              color: const Color(0xFFFF3B30),
+              points: [Point2D(0.1, 0.1), Point2D(0.4, 0.4)],
+              color: Color(0xFFFF3B30),
               strokeWidth: 4.0,
             ),
           ],
-          labels: [
-            const TextLabel(
+          labels: const [
+            TextLabel(
               id: 'l1',
               text: 'VERIFY SPOOL LENGTH',
               x: 0.5,
