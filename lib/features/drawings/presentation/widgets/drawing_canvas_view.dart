@@ -7,9 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 import '../../domain/models/drawing.dart';
 import '../../domain/models/markup.dart';
+import '../../domain/utils/stroke_smoother.dart';
 import '../controllers/markup_controller.dart';
 import 'drawing_markup_painter.dart';
 import 'text_annotation_dialog.dart';
+import 'annotation_comments_sheet.dart';
 import '../../../../shared/widgets/loading_state_view.dart';
 import '../../../../core/theme/color_palette.dart';
 
@@ -66,6 +68,41 @@ class _DrawingCanvasViewState extends State<DrawingCanvasView> {
 
     if (widget.viewerState.isDrawingMode && widget.viewerState.selectedTool != null) {
       widget.controller.startDrawing(pagePoint);
+      return;
+    }
+
+    // Navigation / Pointer Selection Mode (Tap to select or inspect markup)
+    if (!widget.viewerState.isDrawingMode) {
+      _handleSelectionTap(pagePoint);
+    }
+  }
+
+  void _handleSelectionTap(Point2D pagePoint) {
+    final activeMarkups = widget.viewerState.activePageMarkups;
+    Markup? hitMarkup;
+
+    for (final m in activeMarkups.reversed) {
+      if (StrokeSmoother.isMarkupHit(m, pagePoint, 0.035)) {
+        hitMarkup = m;
+        break;
+      }
+    }
+
+    if (hitMarkup != null) {
+      if (widget.viewerState.selectedMarkupId == hitMarkup.id) {
+        // Tapped again -> open discussion comment & review thread
+        AnnotationCommentsSheet.show(
+          context,
+          markup: hitMarkup,
+          controller: widget.controller,
+        );
+      } else {
+        widget.controller.selectMarkup(hitMarkup.id);
+      }
+    } else {
+      if (widget.viewerState.selectedMarkupId != null) {
+        widget.controller.selectMarkup(null);
+      }
     }
   }
 
@@ -134,6 +171,11 @@ class _DrawingCanvasViewState extends State<DrawingCanvasView> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selectedMarkup = widget.viewerState.selectedMarkupId != null
+        ? widget.viewerState.activePageMarkups
+            .where((m) => m.id == widget.viewerState.selectedMarkupId)
+            .firstOrNull
+        : null;
 
     return Stack(
       children: [
@@ -224,6 +266,99 @@ class _DrawingCanvasViewState extends State<DrawingCanvasView> {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+
+        // Floating Selected Markup Context Bar (Bottom Center)
+        if (selectedMarkup != null)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 20,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: AppColors.safetyOrange, width: 1.5),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black45, blurRadius: 16, offset: Offset(0, 4)),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Status Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: selectedMarkup.status == 'Closed'
+                            ? const Color(0xFF00E676).withOpacity(0.2)
+                            : (selectedMarkup.status == 'Addressed'
+                                ? Colors.blueAccent.withOpacity(0.2)
+                                : AppColors.safetyOrange.withOpacity(0.2)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        selectedMarkup.status.toUpperCase(),
+                        style: TextStyle(
+                          color: selectedMarkup.status == 'Closed'
+                              ? const Color(0xFF00E676)
+                              : (selectedMarkup.status == 'Addressed'
+                                  ? Colors.blueAccent
+                                  : AppColors.safetyOrange),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Review & Comments Thread Button
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: isDark ? Colors.white : Colors.black87,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      ),
+                      icon: const Icon(Icons.forum_rounded, size: 16, color: Colors.cyanAccent),
+                      label: const Text('Review Thread', style: TextStyle(fontSize: 12)),
+                      onPressed: () {
+                        AnnotationCommentsSheet.show(
+                          context,
+                          markup: selectedMarkup,
+                          controller: widget.controller,
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 4),
+                    // Copy / Duplicate Button
+                    IconButton(
+                      icon: const Icon(Icons.copy_rounded, size: 18),
+                      tooltip: 'Duplicate Markup',
+                      onPressed: () {
+                        widget.controller.copySelectedMarkup();
+                        widget.controller.pasteMarkup();
+                      },
+                    ),
+                    // Delete Button
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18, color: Colors.redAccent),
+                      tooltip: 'Delete Markup',
+                      onPressed: () {
+                        widget.controller.deleteSelectedMarkup();
+                      },
+                    ),
+                    // Deselect Button
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      tooltip: 'Deselect',
+                      onPressed: () {
+                        widget.controller.selectMarkup(null);
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

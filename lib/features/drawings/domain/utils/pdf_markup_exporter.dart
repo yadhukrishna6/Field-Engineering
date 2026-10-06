@@ -127,7 +127,7 @@ class PdfMarkupExporter {
                 }
 
                 return pw.Container();
-              }).toList(),
+              }),
 
               // 3. Measurements Overlay
               ...pageMeasurements.map((meas) {
@@ -148,7 +148,7 @@ class PdfMarkupExporter {
                     ),
                   ),
                 );
-              }).toList(),
+              }),
             ],
           );
         },

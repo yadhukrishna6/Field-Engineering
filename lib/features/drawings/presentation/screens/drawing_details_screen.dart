@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
+import '../../domain/utils/pdf_markup_exporter.dart';
+import '../widgets/text_annotation_dialog.dart';
 import '../../domain/models/drawing.dart';
 import '../../domain/models/drawing_type.dart';
 import '../../domain/models/markup.dart';
@@ -105,74 +105,25 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
   // --- Dialogs for Specialized Engineering Annotations ---
 
   void _showAddTextDialog(MarkupController controller) {
-    final textController = TextEditingController(text: 'Note: Verify tie-in location on site');
-    double fontSize = 14.0;
-
     showDialog(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Row(
-                children: [
-                  Icon(Icons.text_fields_rounded, color: AppColors.safetyOrange),
-                  SizedBox(width: 8),
-                  Text('Add Text Callout'),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: textController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Annotation Note / Tag Callout',
-                      hintText: 'e.g. 6"-HC-1001 Tie-in requires field verification',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Font Size:'),
-                      DropdownButton<double>(
-                        value: fontSize,
-                        items: [10.0, 12.0, 14.0, 18.0, 24.0, 32.0]
-                            .map((s) => DropdownMenuItem(value: s, child: Text('${s.toInt()} pt')))
-                            .toList(),
-                        onChanged: (v) {
-                          if (v != null) setDialogState(() => fontSize = v);
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (textController.text.trim().isNotEmpty) {
-                      controller.addTextCallout(
-                        const Point2D(0.4, 0.45),
-                        textController.text.trim(),
-                        fontSize: fontSize,
-                      );
-                      Navigator.of(context).pop();
-                    }
-                  },
-                  child: const Text('Place Callout'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (context) => TextAnnotationDialog(
+        initialColor: AppColors.safetyOrange,
+        onConfirm: (text, fontSize, rotation, withLeader) {
+          Point2D? leaderPoint;
+          if (withLeader) {
+            leaderPoint = const Point2D(0.48, 0.52);
+          }
+          controller.addTextCallout(
+            const Point2D(0.4, 0.45),
+            text,
+            fontSize: fontSize,
+            rotation: rotation,
+            leaderPoint: leaderPoint,
+            hasHalo: true,
+          );
+        },
+      ),
     );
   }
 
@@ -663,12 +614,28 @@ class _DrawingDetailsScreenState extends ConsumerState<DrawingDetailsScreen> {
                           _showAsBuiltLifecycleDialog();
                         } else if (action == 'clear') {
                           _confirmClearPage(context, markupController);
-                        } else if (action == 'print') {
-                          if (!kIsWeb && File(drawing.filePath).existsSync()) {
-                            File(drawing.filePath).readAsBytes().then((bytes) {
-                              Printing.layoutPdf(onLayout: (format) => bytes, name: '${drawing.drawingNumber}.pdf');
-                            });
-                          }
+                        } else if (action == 'print' || action == 'export_pdf') {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Generating client-ready flattened vector PDF...'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                          PdfMarkupExporter.exportFlattenedDrawingPdf(
+                            drawing: drawing,
+                            markups: viewerState.markups,
+                            measurements: viewerState.measurements,
+                            pageNumber: viewerState.currentPage,
+                          ).then((bytes) {
+                            Printing.layoutPdf(
+                              onLayout: (format) => bytes,
+                              name: '${drawing.drawingNumber}_Rev${drawing.revision}_Markup.pdf',
+                            );
+                          }).catchError((e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('PDF Export failed: $e'), backgroundColor: Colors.red),
+                            );
+                          });
                         } else if (action == 'inspector') {
                           setState(() => _showInspector = !_showInspector);
                         }

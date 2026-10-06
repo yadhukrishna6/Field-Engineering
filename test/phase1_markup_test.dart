@@ -165,7 +165,7 @@ void main() {
     });
 
     test('Snaps radians correctly', () {
-      final radNear90 = 89.0 * math.pi / 180.0;
+      const radNear90 = 89.0 * math.pi / 180.0;
       final snapped = StrokeSmoother.snapRotationRadians(radNear90);
       expect(snapped, closeTo(math.pi / 2, 0.001));
     });
