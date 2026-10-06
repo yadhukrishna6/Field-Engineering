@@ -8,7 +8,12 @@ import 'package:printing/printing.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/models/drawing_file.dart';
 import '../../domain/models/point_2d.dart';
+import '../../domain/models/text_label.dart';
+import '../../domain/utils/markup_pdf_exporter.dart';
+import '../../domain/utils/stroke_smoother.dart';
+import '../controllers/drawings_list_controller.dart';
 import '../controllers/markup_editor_controller.dart';
+import '../widgets/add_label_sheet.dart';
 import '../widgets/drawing_canvas_painter.dart';
 import '../widgets/markup_bottom_toolbar.dart';
 
@@ -28,6 +33,9 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
   final TransformationController _transformationController = TransformationController();
   final GlobalKey _canvasKey = GlobalKey();
 
+  Point2D? _pointerDownPoint;
+  bool _isDraggingLabel = false;
+
   Point2D _screenToPage(Offset globalPos) {
     final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null) return const Point2D(0, 0);
@@ -44,6 +52,34 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
       _transformationController.value = Matrix4.identity();
     } else {
       _transformationController.value = Matrix4.identity()..scale(2.2);
+    }
+  }
+
+  Future<void> _exportPdf() async {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Generating client-ready Vector PDF with engineering font...'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+      final repo = ref.read(markupRepositoryProvider);
+      final pdfBytes = await MarkupPdfExporter.exportFlattenedPdf(
+        drawing: widget.drawing,
+        repository: repo,
+      );
+      await Printing.sharePdf(
+        bytes: pdfBytes,
+        filename: '\_markup.pdf',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Export failed: '),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     }
   }
 
@@ -77,7 +113,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
               children: [
                 if (widget.drawing.pageCount > 1) ...[
                   Text(
-                    'Page ${state.currentPage} of ${widget.drawing.pageCount}',
+                    'Page \ of ',
                     style: const TextStyle(fontSize: 11, color: Colors.grey),
                   ),
                   const SizedBox(width: 8),
@@ -97,22 +133,24 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
           ],
         ),
         actions: [
-          // Page navigation controls for PDFs
+          // Multi-page navigation for PDFs
           if (widget.drawing.pageCount > 1) ...[
             IconButton(
               icon: const Icon(Icons.chevron_left_rounded),
+              tooltip: 'Previous Sheet',
               onPressed: state.currentPage > 1
                   ? () => controller.setPage(state.currentPage - 1)
                   : null,
             ),
             Center(
               child: Text(
-                '${state.currentPage}/${widget.drawing.pageCount}',
+                '\/',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
             ),
             IconButton(
               icon: const Icon(Icons.chevron_right_rounded),
+              tooltip: 'Next Sheet',
               onPressed: state.currentPage < widget.drawing.pageCount
                   ? () => controller.setPage(state.currentPage + 1)
                   : null,
@@ -133,9 +171,16 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
             onPressed: state.canRedo ? () => controller.redo() : null,
           ),
 
-          // Save Now
+          // PDF Vector Export
           IconButton(
-            icon: const Icon(Icons.save_rounded, color: AppColors.safetyOrange),
+            icon: const Icon(Icons.picture_as_pdf_rounded, color: AppColors.safetyOrange),
+            tooltip: 'Export Vector PDF',
+            onPressed: _exportPdf,
+          ),
+
+          // Force Save
+          IconButton(
+            icon: const Icon(Icons.save_rounded),
             tooltip: 'Save Markups',
             onPressed: () => controller.saveNow(),
           ),
@@ -161,18 +206,81 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                       if (!state.allowFingerDrawing && event.kind != PointerDeviceKind.stylus) {
                         return;
                       }
+
                       final p = _screenToPage(event.position);
-                      controller.startStroke(p);
+                      _pointerDownPoint = p;
+
+                      if (state.selectedTool == MarkupTool.pen) {
+                        controller.startStroke(p);
+                      } else if (state.selectedTool == MarkupTool.eraser) {
+                        controller.eraseAt(p);
+                      } else if (state.selectedTool == MarkupTool.text) {
+                        // Check if tapped on existing label
+                        TextLabel? hitLabel;
+                        for (int i = state.labels.length - 1; i >= 0; i--) {
+                          if (StrokeSmoother.isLabelHit(state.labels[i], p)) {
+                            hitLabel = state.labels[i];
+                            break;
+                          }
+                        }
+
+                        if (hitLabel != null) {
+                          controller.selectLabel(hitLabel.id);
+                          _isDraggingLabel = true;
+                        } else {
+                          controller.selectLabel(null);
+                          _isDraggingLabel = false;
+                        }
+                      }
                     },
                     onPointerMove: (event) {
                       if (!state.allowFingerDrawing && event.kind != PointerDeviceKind.stylus) {
                         return;
                       }
+
                       final p = _screenToPage(event.position);
-                      controller.appendStrokePoint(p);
+
+                      if (state.selectedTool == MarkupTool.pen) {
+                        controller.appendStrokePoint(p);
+                      } else if (state.selectedTool == MarkupTool.eraser) {
+                        controller.eraseAt(p);
+                      } else if (state.selectedTool == MarkupTool.text) {
+                        if (_isDraggingLabel && state.selectedLabelId != null) {
+                          controller.moveLabel(state.selectedLabelId!, p);
+                        }
+                      }
                     },
                     onPointerUp: (event) {
-                      controller.finishStroke();
+                      final p = _screenToPage(event.position);
+
+                      if (state.selectedTool == MarkupTool.pen) {
+                        controller.finishStroke();
+                      } else if (state.selectedTool == MarkupTool.text) {
+                        if (_isDraggingLabel) {
+                          _isDraggingLabel = false;
+                          controller.finishMoveLabel();
+                        } else if (_pointerDownPoint != null) {
+                          final dist = (p.x - _pointerDownPoint!.x).abs() + (p.y - _pointerDownPoint!.y).abs();
+                          // If it was a quick tap with minimal movement on empty space:
+                          if (dist < 0.02 && state.selectedLabelId == null) {
+                            AddLabelSheet.show(
+                              context,
+                              initialColor: state.activeColor,
+                              initialSize: state.activeLabelSize,
+                              onConfirm: (text, size, color) {
+                                controller.addLabel(
+                                  text: text,
+                                  x: p.x,
+                                  y: p.y,
+                                  size: size,
+                                  color: color,
+                                );
+                              },
+                            );
+                          }
+                        }
+                      }
+                      _pointerDownPoint = null;
                     },
                     child: Container(
                       key: _canvasKey,
@@ -189,7 +297,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                           // Base Blueprint / Image Layer
                           _buildBaseLayer(widget.drawing, isDark),
 
-                          // Custom Pen Markup Layer
+                          // Custom Vector Pen & Text Markup Layer
                           LayoutBuilder(
                             builder: (context, constraints) {
                               final size = Size(constraints.maxWidth, constraints.maxHeight);
@@ -197,6 +305,8 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                                 size: size,
                                 painter: DrawingCanvasPainter(
                                   strokes: state.strokes,
+                                  labels: state.labels,
+                                  selectedLabelId: state.selectedLabelId,
                                   activeStrokePoints: state.activeStrokePoints,
                                   activeColor: state.activeColor,
                                   activeStrokeWidth: state.activeStrokeWidth,
@@ -253,7 +363,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
         dynamicLayout: false,
         maxPageWidth: 1600,
         loadingWidget: const Center(child: CircularProgressIndicator(color: AppColors.safetyOrange)),
-        pdfFileName: '${drawing.name}.pdf',
+        pdfFileName: '\.pdf',
       );
     } else {
       if (!kIsWeb && File(path).existsSync()) {

@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:ui';
 import '../models/point_2d.dart';
+import '../models/stroke.dart';
+import '../models/text_label.dart';
 
 class StrokeSmoother {
   /// Catmull-Rom spline interpolation converted to GPU-accelerated cubic Bezier path
@@ -28,9 +30,6 @@ class StrokeSmoother {
       final p2 = offsets[i + 1];
       final p3 = (i + 2 < offsets.length) ? offsets[i + 2] : p2;
 
-      // Catmull-Rom to Cubic Bezier control points conversion formula:
-      // CP1 = P1 + (P2 - P0) / 6
-      // CP2 = P2 - (P3 - P1) / 6
       final cp1 = Offset(p1.dx + (p2.dx - p0.dx) / 6.0, p1.dy + (p2.dy - p0.dy) / 6.0);
       final cp2 = Offset(p2.dx - (p3.dx - p1.dx) / 6.0, p2.dy - (p3.dy - p1.dy) / 6.0);
 
@@ -79,5 +78,35 @@ class StrokeSmoother {
     final projX = lineStart.x + clampedT * dx;
     final projY = lineStart.y + clampedT * dy;
     return math.sqrt(math.pow(p.x - projX, 2) + math.pow(p.y - projY, 2));
+  }
+
+  /// Hit test for stroke eraser (checks if hit point is near any line segment of the stroke)
+  static bool isStrokeHit(Stroke stroke, Point2D hit, {double threshold = 0.025}) {
+    if (stroke.points.isEmpty) return false;
+    if (stroke.points.length == 1) {
+      final p = stroke.points.first;
+      final dist = math.sqrt(math.pow(p.x - hit.x, 2) + math.pow(p.y - hit.y, 2));
+      return dist <= threshold;
+    }
+
+    for (int i = 0; i < stroke.points.length - 1; i++) {
+      final p1 = stroke.points[i];
+      final p2 = stroke.points[i + 1];
+      final dist = _perpendicularDistance(hit, p1, p2);
+      if (dist <= threshold) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Hit test for text label (checks if hit point falls inside label's estimated bounding box)
+  static bool isLabelHit(TextLabel label, Point2D hit) {
+    // Estimated normalized bounds for label
+    final widthEst = (label.text.length * 0.018 * (label.fontSize / 14.0)).clamp(0.06, 0.4);
+    const heightEst = 0.055;
+
+    final rect = Rect.fromLTWH(label.x, label.y, widthEst, heightEst);
+    return rect.contains(Offset(hit.x, hit.y));
   }
 }
