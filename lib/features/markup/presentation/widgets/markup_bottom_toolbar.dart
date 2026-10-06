@@ -5,17 +5,129 @@ import '../controllers/markup_editor_controller.dart';
 class MarkupBottomToolbar extends StatelessWidget {
   final MarkupEditorState state;
   final MarkupEditorController controller;
+  final bool isVerticalRail;
 
   const MarkupBottomToolbar({
     super.key,
     required this.state,
     required this.controller,
+    this.isVerticalRail = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    if (isVerticalRail) {
+      return Container(
+        width: 140,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+          border: Border(right: BorderSide(color: isDark ? Colors.white10 : Colors.black12)),
+          boxShadow: const [
+            BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(3, 0)),
+          ],
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'TOOLS',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+              ),
+              const SizedBox(height: 10),
+              _buildToolButton(MarkupTool.pen, Icons.edit_rounded, 'Pen'),
+              const SizedBox(height: 8),
+              _buildToolButton(MarkupTool.text, Icons.text_fields_rounded, 'Text'),
+              const SizedBox(height: 8),
+              _buildToolButton(MarkupTool.eraser, Icons.auto_fix_high_rounded, 'Eraser'),
+              const Divider(height: 24),
+              if (state.selectedTool == MarkupTool.pen) ...[
+                const Text(
+                  'WIDTH',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                _buildWidthOption(2.0, 'Thin', 4.0),
+                const SizedBox(height: 6),
+                _buildWidthOption(4.0, 'Medium', 7.0),
+                const SizedBox(height: 6),
+                _buildWidthOption(8.0, 'Thick', 11.0),
+                const Divider(height: 24),
+                const Text(
+                  'COLOR',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                _buildVerticalColorPresets(),
+              ] else if (state.selectedTool == MarkupTool.text) ...[
+                const Text(
+                  'SIZE',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                _buildSizeOption('S', 'Small'),
+                const SizedBox(height: 6),
+                _buildSizeOption('M', 'Medium'),
+                const SizedBox(height: 6),
+                _buildSizeOption('L', 'Large'),
+                const Divider(height: 24),
+                const Text(
+                  'COLOR',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                _buildVerticalColorPresets(),
+                if (state.selectedLabelId != null) ...[
+                  const SizedBox(height: 14),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                    icon: const Icon(Icons.delete_rounded, size: 16),
+                    label: const Text('Delete', style: TextStyle(fontSize: 12)),
+                    onPressed: () => controller.deleteSelectedLabel(),
+                  ),
+                ],
+              ] else if (state.selectedTool == MarkupTool.eraser) ...[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Tap or drag over stroke/label to erase',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 10, color: Colors.redAccent, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+              const Divider(height: 24),
+              IconButton(
+                icon: Icon(
+                  state.allowFingerDrawing ? Icons.touch_app_rounded : Icons.edit_note_rounded,
+                  color: state.allowFingerDrawing ? Colors.cyanAccent : Colors.grey,
+                ),
+                tooltip: state.allowFingerDrawing ? 'Finger Drawing ON' : 'Stylus Only',
+                onPressed: () => controller.toggleFingerDrawing(),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Phone / Portrait Bottom Toolbar
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
@@ -30,33 +142,19 @@ class MarkupBottomToolbar extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Row 1: Tool Selection Tabs (Pen, Text, Eraser) + Finger Toggle
+            // Row 1: Tool Selection Tabs (Pen, Text, Eraser)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   children: [
-                    _buildToolButton(
-                      tool: MarkupTool.pen,
-                      icon: Icons.edit_rounded,
-                      label: 'Pen',
-                    ),
+                    _buildToolButton(MarkupTool.pen, Icons.edit_rounded, 'Pen'),
                     const SizedBox(width: 8),
-                    _buildToolButton(
-                      tool: MarkupTool.text,
-                      icon: Icons.text_fields_rounded,
-                      label: 'Text',
-                    ),
+                    _buildToolButton(MarkupTool.text, Icons.text_fields_rounded, 'Text'),
                     const SizedBox(width: 8),
-                    _buildToolButton(
-                      tool: MarkupTool.eraser,
-                      icon: Icons.auto_fix_high_rounded,
-                      label: 'Eraser',
-                    ),
+                    _buildToolButton(MarkupTool.eraser, Icons.auto_fix_high_rounded, 'Eraser'),
                   ],
                 ),
-
-                // Action buttons on right (Delete selected label OR Finger drawing toggle)
                 if (state.selectedTool == MarkupTool.text && state.selectedLabelId != null)
                   IconButton(
                     icon: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent, size: 24),
@@ -74,15 +172,13 @@ class MarkupBottomToolbar extends StatelessWidget {
                   ),
               ],
             ),
-
             const SizedBox(height: 10),
 
-            // Row 2: Contextual Controls based on active tool
+            // Row 2: Contextual Controls
             if (state.selectedTool == MarkupTool.pen) ...[
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // 3 Stroke Width Presets
                   Row(
                     children: [
                       _buildWidthOption(2.0, 'Thin', 4.0),
@@ -92,8 +188,6 @@ class MarkupBottomToolbar extends StatelessWidget {
                       _buildWidthOption(8.0, 'Thick', 11.0),
                     ],
                   ),
-
-                  // 4 Color Preset Dots
                   _buildColorPresets(),
                 ],
               ),
@@ -101,7 +195,6 @@ class MarkupBottomToolbar extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // 3 Label Size Presets (S / M / L)
                   Row(
                     children: [
                       _buildSizeOption('S', 'Small'),
@@ -111,8 +204,6 @@ class MarkupBottomToolbar extends StatelessWidget {
                       _buildSizeOption('L', 'Large'),
                     ],
                   ),
-
-                  // 4 Color Preset Dots
                   _buildColorPresets(),
                 ],
               ),
@@ -150,11 +241,7 @@ class MarkupBottomToolbar extends StatelessWidget {
     );
   }
 
-  Widget _buildToolButton({
-    required MarkupTool tool,
-    required IconData icon,
-    required String label,
-  }) {
+  Widget _buildToolButton(MarkupTool tool, IconData icon, String label) {
     final isSelected = state.selectedTool == tool;
     final activeColor = tool == MarkupTool.eraser ? Colors.redAccent : AppColors.safetyOrange;
 
@@ -166,11 +253,10 @@ class MarkupBottomToolbar extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected ? activeColor.withOpacity(0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isSelected ? activeColor : Colors.transparent,
-          ),
+          border: Border.all(color: isSelected ? activeColor : Colors.transparent),
         ),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, color: isSelected ? activeColor : Colors.grey, size: 18),
             const SizedBox(width: 5),
@@ -195,7 +281,7 @@ class MarkupBottomToolbar extends StatelessWidget {
         return GestureDetector(
           onTap: () => controller.setColor(color),
           child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 5),
+            margin: const EdgeInsets.symmetric(horizontal: 4),
             width: 28,
             height: 28,
             decoration: BoxDecoration(
@@ -205,13 +291,35 @@ class MarkupBottomToolbar extends StatelessWidget {
                 color: isSelected ? Colors.white : Colors.black26,
                 width: isSelected ? 2.5 : 1.0,
               ),
-              boxShadow: isSelected
-                  ? [BoxShadow(color: color.withOpacity(0.5), blurRadius: 6, spreadRadius: 1)]
-                  : null,
             ),
-            child: isSelected
-                ? const Icon(Icons.check, size: 14, color: Colors.white)
-                : null,
+            child: isSelected ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildVerticalColorPresets() {
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 8,
+      runSpacing: 8,
+      children: kMarkupColorPresets.map((color) {
+        final isSelected = state.activeColor.value == color.value;
+        return GestureDetector(
+          onTap: () => controller.setColor(color),
+          child: Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: isSelected ? Colors.white : Colors.black26,
+                width: isSelected ? 2.5 : 1.0,
+              ),
+            ),
+            child: isSelected ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
           ),
         );
       }).toList(),
@@ -227,11 +335,10 @@ class MarkupBottomToolbar extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected ? AppColors.safetyOrange.withOpacity(0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? AppColors.safetyOrange : Colors.white12,
-          ),
+          border: Border.all(color: isSelected ? AppColors.safetyOrange : Colors.white12),
         ),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
               width: dotSize,
@@ -264,16 +371,16 @@ class MarkupBottomToolbar extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected ? AppColors.safetyOrange.withOpacity(0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? AppColors.safetyOrange : Colors.white12,
-          ),
+          border: Border.all(color: isSelected ? AppColors.safetyOrange : Colors.white12),
         ),
-        child: Text(
-          ' ()',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? AppColors.safetyOrange : null,
+        child: Center(
+          child: Text(
+            '$sizeCode ($label)',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              color: isSelected ? AppColors.safetyOrange : null,
+            ),
           ),
         ),
       ),

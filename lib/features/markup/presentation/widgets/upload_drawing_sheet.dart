@@ -99,7 +99,7 @@ class UploadDrawingSheet extends StatelessWidget {
               icon: Icons.camera_alt_rounded,
               color: Colors.amberAccent,
               title: 'Take Site Photo (Camera)',
-              subtitle: 'Capture equipment or piping directly in the field',
+              subtitle: 'Capture field piping or technical layout directly on site',
               onTap: () => _pickFile(context),
             ),
           ],

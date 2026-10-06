@@ -94,6 +94,8 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
     final state = ref.watch(markupEditorControllerProvider(widget.drawing));
     final controller = ref.read(markupEditorControllerProvider(widget.drawing).notifier);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTabletOrDesktop = screenWidth >= 768;
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F1218) : const Color(0xFFDDE3EA),
@@ -186,155 +188,178 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          // Interactive Zoomable Drawing Canvas
-          GestureDetector(
-            onDoubleTap: _handleDoubleTapReset,
-            child: InteractiveViewer(
-              transformationController: _transformationController,
-              minScale: 0.5,
-              maxScale: 8.0,
-              boundaryMargin: const EdgeInsets.all(200),
-              panEnabled: !state.allowFingerDrawing,
-              scaleEnabled: true,
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio: 1.414, // A3 Landscape proportion
-                  child: Listener(
-                    onPointerDown: (event) {
-                      if (!state.allowFingerDrawing && event.kind != PointerDeviceKind.stylus) {
-                        return;
-                      }
-
-                      final p = _screenToPage(event.position);
-                      _pointerDownPoint = p;
-
-                      if (state.selectedTool == MarkupTool.pen) {
-                        controller.startStroke(p);
-                      } else if (state.selectedTool == MarkupTool.eraser) {
-                        controller.eraseAt(p);
-                      } else if (state.selectedTool == MarkupTool.text) {
-                        // Check if tapped on existing label
-                        TextLabel? hitLabel;
-                        for (int i = state.labels.length - 1; i >= 0; i--) {
-                          if (StrokeSmoother.isLabelHit(state.labels[i], p)) {
-                            hitLabel = state.labels[i];
-                            break;
-                          }
-                        }
-
-                        if (hitLabel != null) {
-                          controller.selectLabel(hitLabel.id);
-                          _isDraggingLabel = true;
-                        } else {
-                          controller.selectLabel(null);
-                          _isDraggingLabel = false;
-                        }
-                      }
-                    },
-                    onPointerMove: (event) {
-                      if (!state.allowFingerDrawing && event.kind != PointerDeviceKind.stylus) {
-                        return;
-                      }
-
-                      final p = _screenToPage(event.position);
-
-                      if (state.selectedTool == MarkupTool.pen) {
-                        controller.appendStrokePoint(p);
-                      } else if (state.selectedTool == MarkupTool.eraser) {
-                        controller.eraseAt(p);
-                      } else if (state.selectedTool == MarkupTool.text) {
-                        if (_isDraggingLabel && state.selectedLabelId != null) {
-                          controller.moveLabel(state.selectedLabelId!, p);
-                        }
-                      }
-                    },
-                    onPointerUp: (event) {
-                      final p = _screenToPage(event.position);
-
-                      if (state.selectedTool == MarkupTool.pen) {
-                        controller.finishStroke();
-                      } else if (state.selectedTool == MarkupTool.text) {
-                        if (_isDraggingLabel) {
-                          _isDraggingLabel = false;
-                          controller.finishMoveLabel();
-                        } else if (_pointerDownPoint != null) {
-                          final dist = (p.x - _pointerDownPoint!.x).abs() + (p.y - _pointerDownPoint!.y).abs();
-                          // If it was a quick tap with minimal movement on empty space:
-                          if (dist < 0.02 && state.selectedLabelId == null) {
-                            AddLabelSheet.show(
-                              context,
-                              initialColor: state.activeColor,
-                              initialSize: state.activeLabelSize,
-                              onConfirm: (text, size, color) {
-                                controller.addLabel(
-                                  text: text,
-                                  x: p.x,
-                                  y: p.y,
-                                  size: size,
-                                  color: color,
-                                );
-                              },
-                            );
-                          }
-                        }
-                      }
-                      _pointerDownPoint = null;
-                    },
-                    child: Container(
-                      key: _canvasKey,
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF13171F) : const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(4),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black38, blurRadius: 16, offset: Offset(0, 6)),
-                        ],
-                      ),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          // Base Blueprint / Image Layer
-                          _buildBaseLayer(widget.drawing, isDark),
-
-                          // Custom Vector Pen & Text Markup Layer
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              final size = Size(constraints.maxWidth, constraints.maxHeight);
-                              return CustomPaint(
-                                size: size,
-                                painter: DrawingCanvasPainter(
-                                  strokes: state.strokes,
-                                  labels: state.labels,
-                                  selectedLabelId: state.selectedLabelId,
-                                  activeStrokePoints: state.activeStrokePoints,
-                                  activeColor: state.activeColor,
-                                  activeStrokeWidth: state.activeStrokeWidth,
-                                  canvasSize: size,
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
+      body: isTabletOrDesktop
+          ? Row(
+              children: [
+                // Left Rail Toolbar on Tablet / Desktop
+                MarkupBottomToolbar(
+                  state: state,
+                  controller: controller,
+                  isVerticalRail: true,
+                ),
+                // Center Canvas
+                Expanded(
+                  child: _buildCanvasArea(state, controller, isDark),
+                ),
+              ],
+            )
+          : Stack(
+              children: [
+                // Canvas Area
+                Positioned.fill(
+                  child: _buildCanvasArea(state, controller, isDark),
+                ),
+                // Bottom Toolbar on Mobile
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: MarkupBottomToolbar(
+                    state: state,
+                    controller: controller,
+                    isVerticalRail: false,
                   ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildCanvasArea(
+    MarkupEditorState state,
+    MarkupEditorController controller,
+    bool isDark,
+  ) {
+    return GestureDetector(
+      onDoubleTap: _handleDoubleTapReset,
+      child: InteractiveViewer(
+        transformationController: _transformationController,
+        minScale: 0.5,
+        maxScale: 8.0,
+        boundaryMargin: const EdgeInsets.all(200),
+        panEnabled: !state.allowFingerDrawing,
+        scaleEnabled: true,
+        child: Center(
+          child: AspectRatio(
+            aspectRatio: 1.414, // A3 Landscape proportion
+            child: Listener(
+              onPointerDown: (event) {
+                if (!state.allowFingerDrawing && event.kind != PointerDeviceKind.stylus) {
+                  return;
+                }
+
+                final p = _screenToPage(event.position);
+                _pointerDownPoint = p;
+
+                if (state.selectedTool == MarkupTool.pen) {
+                  controller.startStroke(p);
+                } else if (state.selectedTool == MarkupTool.eraser) {
+                  controller.eraseAt(p);
+                } else if (state.selectedTool == MarkupTool.text) {
+                  TextLabel? hitLabel;
+                  for (int i = state.labels.length - 1; i >= 0; i--) {
+                    if (StrokeSmoother.isLabelHit(state.labels[i], p)) {
+                      hitLabel = state.labels[i];
+                      break;
+                    }
+                  }
+
+                  if (hitLabel != null) {
+                    controller.selectLabel(hitLabel.id);
+                    _isDraggingLabel = true;
+                  } else {
+                    controller.selectLabel(null);
+                    _isDraggingLabel = false;
+                  }
+                }
+              },
+              onPointerMove: (event) {
+                if (!state.allowFingerDrawing && event.kind != PointerDeviceKind.stylus) {
+                  return;
+                }
+
+                final p = _screenToPage(event.position);
+
+                if (state.selectedTool == MarkupTool.pen) {
+                  controller.appendStrokePoint(p);
+                } else if (state.selectedTool == MarkupTool.eraser) {
+                  controller.eraseAt(p);
+                } else if (state.selectedTool == MarkupTool.text) {
+                  if (_isDraggingLabel && state.selectedLabelId != null) {
+                    controller.moveLabel(state.selectedLabelId!, p);
+                  }
+                }
+              },
+              onPointerUp: (event) {
+                final p = _screenToPage(event.position);
+
+                if (state.selectedTool == MarkupTool.pen) {
+                  controller.finishStroke();
+                } else if (state.selectedTool == MarkupTool.text) {
+                  if (_isDraggingLabel) {
+                    _isDraggingLabel = false;
+                    controller.finishMoveLabel();
+                  } else if (_pointerDownPoint != null) {
+                    final dist = (p.x - _pointerDownPoint!.x).abs() + (p.y - _pointerDownPoint!.y).abs();
+                    if (dist < 0.02 && state.selectedLabelId == null) {
+                      AddLabelSheet.show(
+                        context,
+                        initialColor: state.activeColor,
+                        initialSize: state.activeLabelSize,
+                        onConfirm: (text, size, color) {
+                          controller.addLabel(
+                            text: text,
+                            x: p.x,
+                            y: p.y,
+                            size: size,
+                            color: color,
+                          );
+                        },
+                      );
+                    }
+                  }
+                }
+                _pointerDownPoint = null;
+              },
+              child: Container(
+                key: _canvasKey,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF13171F) : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(4),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black38, blurRadius: 16, offset: Offset(0, 6)),
+                  ],
+                ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Base Blueprint / Image Layer
+                    _buildBaseLayer(widget.drawing, isDark),
+
+                    // Custom Vector Pen & Text Markup Layer
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final size = Size(constraints.maxWidth, constraints.maxHeight);
+                        return CustomPaint(
+                          size: size,
+                          painter: DrawingCanvasPainter(
+                            strokes: state.strokes,
+                            labels: state.labels,
+                            selectedLabelId: state.selectedLabelId,
+                            activeStrokePoints: state.activeStrokePoints,
+                            activeColor: state.activeColor,
+                            activeStrokeWidth: state.activeStrokeWidth,
+                            canvasSize: size,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-
-          // Bottom Pen & Color Toolbar
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: MarkupBottomToolbar(
-              state: state,
-              controller: controller,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

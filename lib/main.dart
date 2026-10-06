@@ -6,13 +6,11 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
-import 'features/settings/presentation/controllers/settings_controller.dart';
-import 'core/storage/offline_storage_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Non-blocking database factory initialization
+  // Database initialization for Web / Desktop / Mobile
   if (kIsWeb) {
     databaseFactory = databaseFactoryFfiWebNoWebWorker;
   } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -20,29 +18,22 @@ void main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  // Pre-initialize in background without blocking UI startup
-  OfflineStorageManager.instance.initialize().catchError((e) {
-    debugPrint('Storage init notice: $e');
-  });
-
   runApp(
     const ProviderScope(
-      child: FieldEngineeringApp(),
+      child: DrawingMarkupApp(),
     ),
   );
 }
 
-class FieldEngineeringApp extends ConsumerWidget {
-  const FieldEngineeringApp({super.key});
+class DrawingMarkupApp extends StatelessWidget {
+  const DrawingMarkupApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final settings = ref.watch(settingsNotifierProvider);
-
+  Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Field Engineering',
+      title: 'Drawing Markup',
       debugShowCheckedModeBanner: false,
-      themeMode: settings.themeMode,
+      themeMode: ThemeMode.dark,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       routerConfig: appRouter,

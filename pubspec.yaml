@@ -1,5 +1,5 @@
 name: field_engineering
-description: "Field Engineering - Offline-first tablet platform for oil & gas, EPC, construction, piping and inspection engineers."
+description: "Drawing Markup - Digital markup tool for technical engineering drawings, P&IDs, and isometric piping layouts."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -25,7 +25,7 @@ dependencies:
   path: ^1.9.0
   shared_preferences: ^2.2.3
 
-  # PDF Engine & Generation (Generates authentic vector P&ID and engineering drawings offline)
+  # PDF Engine & Vector Generation
   pdf: ^3.10.8
   printing: ^5.12.0
 
@@ -34,10 +34,8 @@ dependencies:
   uuid: ^4.4.0
   intl: ^0.19.0
 
-  # UI, Icons, Animations & Design System
+  # Typography & Fonts
   google_fonts: ^6.2.1
-  flutter_animate: ^4.5.0
-  fl_chart: ^0.68.0
 
 dev_dependencies:
   flutter_test:
@@ -48,5 +46,3 @@ flutter:
   uses-material-design: true
   assets:
     - assets/sample_drawings/
-    - assets/icons/
-    - assets/images/

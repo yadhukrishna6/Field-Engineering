@@ -46,7 +46,7 @@ class AppColors {
   static const Color drawingPid = Color(0xFF0284C7); // Process & Instrumentation (Sky Blue)
   static const Color drawingIsometric = Color(0xFF7C3AED); // Piping Isometric (Purple)
   static const Color drawingElectrical = Color(0xFFD97706); // Electrical / SLD (Amber)
-  static const Color drawingMechanical = Color(0xFF059669); // Mechanical / Equipment (Green)
+  static const Color drawingMechanical = Color(0xFF059669); // Mechanical / Process (Green)
   static const Color drawingStructural = Color(0xFFDC2626); // Structural / Steel (Red)
   static const Color drawingCivil = Color(0xFF4B5563); // Civil / Earthworks (Slate)
   static const Color drawingPiping = Color(0xFF4338CA); // Piping General (Indigo)

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'rbac_manager.dart';
 
 class SecureStorageService {
   static final SecureStorageService _instance = SecureStorageService._internal();
@@ -8,38 +7,8 @@ class SecureStorageService {
   SecureStorageService._internal();
 
   static const String _kAuthTokenKey = 'sec_auth_token_enc';
-  static const String _kUserSessionKey = 'sec_user_session_enc';
   static const String _kEncryptionSalt = 'FIELD_ENG_AES_256_OFFLINE_SECRET';
 
-  SessionUser? _currentUser;
-  DateTime? _lastUserActivity;
-  final Duration _sessionTimeoutDuration = const Duration(minutes: 60);
-
-  SessionUser get currentUser => _currentUser ?? SessionUser.defaultLeadEngineer();
-
-  bool get isSessionExpired {
-    if (_lastUserActivity == null) return false;
-    return DateTime.now().difference(_lastUserActivity!) > _sessionTimeoutDuration;
-  }
-
-  void recordUserActivity() {
-    _lastUserActivity = DateTime.now();
-  }
-
-  void switchUserRole(UserRole newRole) {
-    final current = currentUser;
-    _currentUser = SessionUser(
-      id: current.id,
-      email: current.email,
-      fullName: current.fullName,
-      role: newRole,
-      company: current.company,
-      loggedInAt: DateTime.now(),
-    );
-    recordUserActivity();
-  }
-
-  /// Encrypts string using XOR + Base64 salt transformation for secure offline local storage
   String _encrypt(String plainText) {
     final keyBytes = utf8.encode(_kEncryptionSalt);
     final textBytes = utf8.encode(plainText);
@@ -80,8 +49,5 @@ class SecureStorageService {
   Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kAuthTokenKey);
-    await prefs.remove(_kUserSessionKey);
-    _currentUser = null;
-    _lastUserActivity = null;
   }
 }
