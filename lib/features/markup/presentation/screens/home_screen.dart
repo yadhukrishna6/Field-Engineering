@@ -7,37 +7,55 @@ import '../../../../core/theme/theme_controller.dart';
 import '../../domain/models/drawing_file.dart';
 import '../controllers/drawings_list_controller.dart';
 import '../widgets/dune_wave_painter.dart';
+import '../widgets/theme_selector_modal.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final state = ref.watch(drawingsListControllerProvider);
-    final themeMode = ref.watch(themeControllerProvider);
+    final themeState = ref.watch(themeControllerProvider);
 
-    final formattedDate = DateFormat('EEEE, MMM d, yyyy').format(DateTime.now());
-    final textColor = isDark ? AppColors.darkText : AppColors.lightText;
-    final secondaryTextColor = isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
-    final outlineColor = isDark ? AppColors.darkOutline : AppColors.lightOutline;
-    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.lightSurface;
-    final primaryColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
+    final isOutdoor = themeState.isOutdoorActive;
+    final isDark = themeState.isDarkActive;
+
+    final backgroundColor = isOutdoor
+        ? AppColors.outdoorBackground
+        : (isDark ? AppColors.darkBackground : AppColors.lightBackground);
+    final surfaceColor = isOutdoor
+        ? AppColors.outdoorSurface
+        : (isDark ? AppColors.darkSurface : AppColors.lightSurface);
+    final outlineColor = isOutdoor
+        ? AppColors.outdoorOutline
+        : (isDark ? AppColors.darkOutline : AppColors.lightOutline);
+    final textColor = isOutdoor
+        ? AppColors.outdoorText
+        : (isDark ? AppColors.darkText : AppColors.lightText);
+    final secondaryTextColor = isOutdoor
+        ? AppColors.outdoorSecondaryText
+        : (isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText);
+    final primaryColor = isOutdoor
+        ? AppColors.outdoorPrimary
+        : (isDark ? AppColors.darkPrimary : AppColors.lightPrimary);
+
+    final formattedDate = DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now());
 
     return Scaffold(
+      backgroundColor: backgroundColor,
       appBar: AppBar(
         title: const Text('Drawing markup'),
         actions: [
           IconButton(
             icon: Icon(
-              themeMode == ThemeMode.dark
-                  ? Icons.dark_mode_rounded
-                  : (themeMode == ThemeMode.light
-                      ? Icons.light_mode_rounded
-                      : Icons.brightness_auto_rounded),
+              themeState.themeMode == AppThemeMode.auto
+                  ? Icons.brightness_auto_rounded
+                  : (isOutdoor
+                      ? Icons.wb_sunny_rounded
+                      : (isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded)),
             ),
-            tooltip: 'Toggle theme mode (${themeMode.name})',
-            onPressed: () => ref.read(themeControllerProvider.notifier).toggleTheme(context),
+            tooltip: 'Theme: ${themeState.themeMode.label}',
+            onPressed: () => ThemeSelectorModal.show(context),
           ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -60,16 +78,15 @@ class HomeScreen extends ConsumerWidget {
                   Text(
                     formattedDate,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: isOutdoor ? 14 : 13,
                       fontWeight: FontWeight.w500,
                       color: secondaryTextColor,
                     ),
                   ),
                   const SizedBox(height: 18),
 
-                  // ONE Large "Drawings" Hero Card with subtle dune-wave shapes
-                  _buildHeroCard(context, state, isDark, primaryColor),
-
+                  // Large "Drawings" Hero Card
+                  _buildHeroCard(context, state, isOutdoor, isDark, primaryColor),
                   const SizedBox(height: 28),
 
                   // "Recent" Section Title
@@ -79,7 +96,7 @@ class HomeScreen extends ConsumerWidget {
                       Text(
                         'Recent',
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: isOutdoor ? 18 : 16,
                           fontWeight: FontWeight.bold,
                           color: textColor,
                         ),
@@ -89,7 +106,7 @@ class HomeScreen extends ConsumerWidget {
                           onPressed: () => context.push('/drawings'),
                           child: Text(
                             'View all',
-                            style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 13),
+                            style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: isOutdoor ? 14 : 13),
                           ),
                         ),
                     ],
@@ -110,7 +127,7 @@ class HomeScreen extends ConsumerWidget {
                     ...state.recentDrawings.map((drawing) {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
-                        child: _buildRecentCard(context, drawing, surfaceColor, outlineColor, textColor, secondaryTextColor, isDark),
+                        child: _buildRecentCard(context, drawing, surfaceColor, outlineColor, textColor, secondaryTextColor, isOutdoor, isDark),
                       );
                     }),
                 ],
@@ -122,18 +139,29 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeroCard(BuildContext context, DrawingsListState state, bool isDark, Color primaryColor) {
+  Widget _buildHeroCard(
+    BuildContext context,
+    DrawingsListState state,
+    bool isOutdoor,
+    bool isDark,
+    Color primaryColor,
+  ) {
     final totalFiles = state.totalFilesCount;
     final withMarkup = state.filesWithMarkupCount;
     final countSubtitle = '$totalFiles ${totalFiles == 1 ? "file" : "files"}, $withMarkup with markup';
 
+    final heroColor = isOutdoor
+        ? AppColors.outdoorPrimary
+        : (isDark ? const Color(0xFF9E4B28) : AppColors.lightPrimary);
+
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF9E4B28) : AppColors.lightPrimary,
+        color: heroColor,
         borderRadius: BorderRadius.circular(16),
+        border: isOutdoor ? Border.all(color: AppColors.outdoorOutline, width: 1.5) : null,
         boxShadow: [
           BoxShadow(
-            color: (isDark ? Colors.black38 : AppColors.lightPrimary.withOpacity(0.2)),
+            color: (isDark ? Colors.black38 : heroColor.withOpacity(0.2)),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -264,6 +292,7 @@ class HomeScreen extends ConsumerWidget {
     Color outlineColor,
     Color textColor,
     Color secondaryTextColor,
+    bool isOutdoor,
     bool isDark,
   ) {
     final formattedDate = DateFormat('MMM dd, yyyy').format(drawing.createdAt);
@@ -272,7 +301,7 @@ class HomeScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: surfaceColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: outlineColor, width: 1.0),
+        border: Border.all(color: outlineColor, width: isOutdoor ? 1.5 : 1.0),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
@@ -288,19 +317,19 @@ class HomeScreen extends ConsumerWidget {
           ),
           child: Icon(
             drawing.isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
-            color: drawing.isPdf ? Colors.redAccent : Colors.blueAccent,
+            color: drawing.isPdf ? (isOutdoor ? AppColors.outdoorInkRed : Colors.redAccent) : Colors.blueAccent,
             size: 22,
           ),
         ),
         title: Text(
           drawing.name,
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: isOutdoor ? 15 : 14, color: textColor),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
           '${drawing.fileType.toUpperCase()} • $formattedDate',
-          style: TextStyle(fontSize: 12, color: secondaryTextColor),
+          style: TextStyle(fontSize: isOutdoor ? 13 : 12, color: secondaryTextColor),
         ),
         trailing: const Icon(Icons.chevron_right_rounded, size: 20),
       ),

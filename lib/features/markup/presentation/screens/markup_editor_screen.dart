@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:printing/printing.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/theme_controller.dart';
 import '../../domain/models/annotation_item.dart';
 import '../../domain/models/drawing_file.dart';
 import '../../domain/models/markup_layer.dart';
@@ -20,6 +21,7 @@ import '../widgets/markup_bottom_toolbar.dart';
 import '../widgets/minimap_view.dart';
 import '../widgets/shapes_selection_popup.dart';
 import '../widgets/snap_settings_chip.dart';
+import '../widgets/theme_selector_modal.dart';
 
 class MarkupEditorScreen extends ConsumerStatefulWidget {
   final DrawingFile drawing;
@@ -120,13 +122,23 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(markupEditorControllerProvider(widget.drawing));
     final controller = ref.read(markupEditorControllerProvider(widget.drawing).notifier);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final themeState = ref.watch(themeControllerProvider);
+
+    final isOutdoor = themeState.isOutdoorActive;
+    final isDark = themeState.isDarkActive;
+
+    final backgroundColor = isOutdoor
+        ? AppColors.outdoorBackground
+        : (isDark ? AppColors.darkBackground : AppColors.lightBackground);
+    final primaryColor = isOutdoor
+        ? AppColors.outdoorPrimary
+        : (isDark ? AppColors.darkPrimary : AppColors.lightPrimary);
+
     final screenWidth = MediaQuery.of(context).size.width;
     final isTabletLandscape = screenWidth >= 768;
-    final primaryColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+      backgroundColor: backgroundColor,
       appBar: state.isFullscreen
           ? null
           : AppBar(
@@ -135,7 +147,10 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                 children: [
                   Text(
                     widget.drawing.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: isOutdoor ? 17 : 15,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -144,7 +159,10 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                       if (widget.drawing.pageCount > 1) ...[
                         Text(
                           'Page ${state.currentPage} of ${widget.drawing.pageCount}',
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          style: TextStyle(
+                            fontSize: isOutdoor ? 12 : 11,
+                            color: isOutdoor ? AppColors.outdoorSecondaryText : Colors.grey,
+                          ),
                         ),
                         const SizedBox(width: 8),
                       ],
@@ -155,7 +173,9 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: state.isAutosaving ? Colors.amber : Colors.greenAccent,
+                          color: state.isAutosaving
+                              ? Colors.amber
+                              : (isOutdoor ? AppColors.outdoorInkGreen : Colors.greenAccent),
                         ),
                       ),
                     ],
@@ -172,7 +192,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                   Center(
                     child: Text(
                       '${state.currentPage}/${widget.drawing.pageCount}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: isOutdoor ? 14 : 13),
                     ),
                   ),
                   IconButton(
@@ -181,6 +201,11 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                     onPressed: state.currentPage < widget.drawing.pageCount ? () => controller.setPage(state.currentPage + 1) : null,
                   ),
                 ],
+                IconButton(
+                  icon: Icon(Icons.palette_outlined, color: primaryColor),
+                  tooltip: 'Display Theme',
+                  onPressed: () => ThemeSelectorModal.show(context),
+                ),
                 IconButton(
                   icon: Icon(Icons.picture_as_pdf_rounded, color: primaryColor),
                   tooltip: 'Export Vector PDF',
@@ -200,13 +225,13 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
               children: [
                 // Left Tool Rail (Tablet Landscape & Desktop)
                 if (isTabletLandscape)
-                  _buildLeftToolRail(context, state, controller, isDark),
+                  _buildLeftToolRail(context, state, controller, isOutdoor, isDark),
 
                 // Main Canvas Area with Overlays
                 Expanded(
                   child: Stack(
                     children: [
-                      // Interactive Drawing Canvas
+                      // Interactive Drawing Canvas (White paper in ALL themes)
                       Positioned.fill(
                         child: _buildCanvasArea(state, controller, isDark),
                       ),
@@ -252,9 +277,9 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
 
           // Phone Tools Rail / Bottom Bar
           if (!isTabletLandscape)
-            _buildPhoneToolRail(context, state, controller, isDark),
+            _buildPhoneToolRail(context, state, controller, isOutdoor, isDark),
 
-          // Bottom Bar (Layers toggle, 7 color dots, stroke slider, undo/redo, zoom %, fullscreen)
+          // Bottom Bar
           MarkupBottomToolbar(
             state: state,
             controller: controller,
@@ -269,12 +294,21 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
     BuildContext context,
     MarkupEditorState state,
     MarkupEditorController controller,
+    bool isOutdoor,
     bool isDark,
   ) {
-    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.lightSurface;
-    final outlineColor = isDark ? AppColors.darkOutline : AppColors.lightOutline;
-    final textColor = isDark ? AppColors.darkText : AppColors.lightText;
-    final primaryColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
+    final surfaceColor = isOutdoor
+        ? AppColors.outdoorSurface
+        : (isDark ? AppColors.darkSurface : AppColors.lightSurface);
+    final outlineColor = isOutdoor
+        ? AppColors.outdoorOutline
+        : (isDark ? AppColors.darkOutline : AppColors.lightOutline);
+    final textColor = isOutdoor
+        ? AppColors.outdoorText
+        : (isDark ? AppColors.darkText : AppColors.lightText);
+    final primaryColor = isOutdoor
+        ? AppColors.outdoorPrimary
+        : (isDark ? AppColors.darkPrimary : AppColors.lightPrimary);
 
     final tools = [
       {'tool': MarkupTool.pen, 'icon': Icons.edit_rounded, 'label': 'Pen'},
@@ -288,10 +322,10 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
     ];
 
     return Container(
-      width: 76,
+      width: isOutdoor ? 84 : 76,
       decoration: BoxDecoration(
         color: surfaceColor,
-        border: Border(right: BorderSide(color: outlineColor, width: 1.0)),
+        border: Border(right: BorderSide(color: outlineColor, width: isOutdoor ? 1.5 : 1.0)),
       ),
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -300,7 +334,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
           final isSelected = state.selectedTool == tool;
 
           return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: EdgeInsets.symmetric(horizontal: isOutdoor ? 6 : 8, vertical: isOutdoor ? 4 : 4),
             child: InkWell(
               onTap: () {
                 if (tool == MarkupTool.shapes) {
@@ -311,13 +345,14 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
               },
               borderRadius: BorderRadius.circular(10),
               child: Container(
+                constraints: BoxConstraints(minHeight: isOutdoor ? 52 : 44), // Min 48dp touch target
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(
                   color: isSelected ? primaryColor.withOpacity(0.18) : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isSelected ? primaryColor : Colors.transparent,
-                    width: 1.2,
+                    color: isSelected ? primaryColor : (isOutdoor ? outlineColor.withOpacity(0.3) : Colors.transparent),
+                    width: isOutdoor ? 1.5 : 1.2,
                   ),
                 ),
                 child: Column(
@@ -325,15 +360,15 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                   children: [
                     Icon(
                       t['icon'] as IconData,
-                      size: 22,
+                      size: isOutdoor ? 24 : 22,
                       color: isSelected ? primaryColor : textColor,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       t['label'] as String,
                       style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontSize: isOutdoor ? 11 : 10,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                         color: isSelected ? primaryColor : textColor,
                       ),
                     ),
@@ -351,12 +386,21 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
     BuildContext context,
     MarkupEditorState state,
     MarkupEditorController controller,
+    bool isOutdoor,
     bool isDark,
   ) {
-    final surfaceColor = isDark ? AppColors.darkSurface : AppColors.lightSurface;
-    final outlineColor = isDark ? AppColors.darkOutline : AppColors.lightOutline;
-    final textColor = isDark ? AppColors.darkText : AppColors.lightText;
-    final primaryColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
+    final surfaceColor = isOutdoor
+        ? AppColors.outdoorSurface
+        : (isDark ? AppColors.darkSurface : AppColors.lightSurface);
+    final outlineColor = isOutdoor
+        ? AppColors.outdoorOutline
+        : (isDark ? AppColors.darkOutline : AppColors.lightOutline);
+    final textColor = isOutdoor
+        ? AppColors.outdoorText
+        : (isDark ? AppColors.darkText : AppColors.lightText);
+    final primaryColor = isOutdoor
+        ? AppColors.outdoorPrimary
+        : (isDark ? AppColors.darkPrimary : AppColors.lightPrimary);
 
     final tools = [
       {'tool': MarkupTool.pen, 'icon': Icons.edit_rounded, 'label': 'Pen'},
@@ -373,7 +417,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
       color: surfaceColor,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: outlineColor, width: 0.5)),
+        border: Border(top: BorderSide(color: outlineColor, width: isOutdoor ? 1.5 : 0.5)),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -385,8 +429,8 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: ChoiceChip(
-                avatar: Icon(t['icon'] as IconData, size: 16, color: isSelected ? primaryColor : textColor),
-                label: Text(t['label'] as String),
+                avatar: Icon(t['icon'] as IconData, size: isOutdoor ? 18 : 16, color: isSelected ? primaryColor : textColor),
+                label: Text(t['label'] as String, style: TextStyle(fontSize: isOutdoor ? 13 : 12)),
                 selected: isSelected,
                 selectedColor: primaryColor.withOpacity(0.18),
                 onSelected: (_) {
@@ -510,7 +554,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
               child: Container(
                 key: _canvasKey,
                 decoration: BoxDecoration(
-                  color: AppColors.canvasPaper, // Stays pure white in BOTH themes
+                  color: AppColors.canvasPaper, // Stays pure white #FFFFFF in ALL themes
                   borderRadius: BorderRadius.circular(4),
                   boxShadow: const [
                     BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 4)),
