@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -309,18 +310,25 @@ class _DrawingDetailScreenState extends ConsumerState<DrawingDetailScreen> {
   Widget _buildBaseLayer(DrawingFile drawing) {
     final path = drawing.localPath;
     if (drawing.isPdf) {
-      final fileExists = !kIsWeb && File(path).existsSync();
+      final fileExists = !kIsWeb && path.isNotEmpty && File(path).existsSync();
       return PdfPreview(
         build: (format) async {
           if (!kIsWeb && fileExists) {
             return await File(path).readAsBytes();
-          } else {
+          } else if (drawing.fileUrl != null && drawing.fileUrl!.isNotEmpty) {
             try {
-              final bd = await rootBundle.load('assets/sample_drawings/pid_drawing_sample.pdf');
-              return bd.buffer.asUint8List();
-            } catch (_) {
-              return Uint8List(0);
-            }
+              final url = drawing.fileUrl!.startsWith('http')
+                  ? drawing.fileUrl!
+                  : 'http://localhost:8081${drawing.fileUrl}';
+              final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+              if (res.statusCode == 200) return res.bodyBytes;
+            } catch (_) {}
+          }
+          try {
+            final bd = await rootBundle.load('assets/sample_drawings/pid_drawing_sample.pdf');
+            return bd.buffer.asUint8List();
+          } catch (_) {
+            return Uint8List(0);
           }
         },
         useActions: false,
@@ -333,8 +341,26 @@ class _DrawingDetailScreenState extends ConsumerState<DrawingDetailScreen> {
         pdfFileName: '${drawing.name}.pdf',
       );
     } else {
-      if (!kIsWeb && File(path).existsSync()) {
+      if (!kIsWeb && path.isNotEmpty && File(path).existsSync()) {
         return Image.file(File(path), fit: BoxFit.contain);
+      } else if (drawing.fileUrl != null && drawing.fileUrl!.isNotEmpty) {
+        final url = drawing.fileUrl!.startsWith('http')
+            ? drawing.fileUrl!
+            : 'http://localhost:8081${drawing.fileUrl}';
+        return Image.network(
+          url,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.architecture_rounded, size: 48, color: AppColors.lightPrimary),
+                const SizedBox(height: 8),
+                Text(drawing.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
+              ],
+            ),
+          ),
+        );
       } else {
         return Center(
           child: Column(

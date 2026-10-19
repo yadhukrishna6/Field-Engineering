@@ -23,7 +23,7 @@ enum AppActiveTheme {
 class ThemeState {
   final AppThemeMode themeMode;
   final bool isDirectSunlightDetected; // Ambient light sensor (> 25,000 lux)
-  final bool manualOutdoorOverride;    // Manual ambient override switch
+  final bool manualOutdoorOverride;    // Manual ambient override switch (persisted)
 
   const ThemeState({
     this.themeMode = AppThemeMode.auto,
@@ -83,6 +83,7 @@ class ThemeState {
 
 class ThemeController extends StateNotifier<ThemeState> {
   static const _prefKey = 'app_theme_mode_v2';
+  static const _prefOverrideKey = 'manual_outdoor_override_v2';
   final SharedPreferences? _prefs;
 
   ThemeController(this._prefs) : super(const ThemeState()) {
@@ -92,26 +93,38 @@ class ThemeController extends StateNotifier<ThemeState> {
   void _loadPersistedTheme() {
     if (_prefs == null) return;
     final saved = _prefs.getString(_prefKey);
+    final savedOverride = _prefs.getBool(_prefOverrideKey) ?? false;
+    AppThemeMode mode = AppThemeMode.auto;
     if (saved != null) {
-      final mode = AppThemeMode.values.firstWhere(
+      mode = AppThemeMode.values.firstWhere(
         (m) => m.name == saved,
         orElse: () => AppThemeMode.auto,
       );
-      state = state.copyWith(themeMode: mode);
     }
+    state = state.copyWith(
+      themeMode: mode,
+      manualOutdoorOverride: savedOverride,
+    );
   }
 
   Future<void> setThemeMode(AppThemeMode mode) async {
     state = state.copyWith(themeMode: mode);
-    final p = _prefs; if (p != null) { await p.setString(_prefKey, mode.name); }
+    final p = _prefs;
+    if (p != null) {
+      await p.setString(_prefKey, mode.name);
+    }
   }
 
   void setAmbientSunlightDetected(bool isBrightSunlight) {
     state = state.copyWith(isDirectSunlightDetected: isBrightSunlight);
   }
 
-  void setManualOutdoorOverride(bool override) {
+  Future<void> setManualOutdoorOverride(bool override) async {
     state = state.copyWith(manualOutdoorOverride: override);
+    final p = _prefs;
+    if (p != null) {
+      await p.setBool(_prefOverrideKey, override);
+    }
   }
 
   void cycleTheme() {

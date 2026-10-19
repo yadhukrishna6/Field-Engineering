@@ -48,6 +48,15 @@ class StrokeBeautifier {
       switch (forcedType) {
         case AnnotationType.line:
           return _fitLine(smoothed, rawPoints, snapConfig);
+        case AnnotationType.strikeOut:
+          final line = _fitLine(smoothed, rawPoints, snapConfig);
+          return BeautifiedResult(
+            type: AnnotationType.strikeOut,
+            points: line.points,
+            didSnap: line.didSnap,
+            snappedAngle: line.snappedAngle,
+            metadata: const {'isStrikeOut': true},
+          );
         case AnnotationType.arrow:
           return _fitArrow(smoothed, rawPoints, snapConfig);
         case AnnotationType.rectangle:

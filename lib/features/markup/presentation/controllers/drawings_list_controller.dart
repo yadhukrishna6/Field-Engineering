@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import '../../../../core/api/api_client.dart';
 import '../../domain/models/drawing_file.dart';
+import '../../domain/models/drawing_text_token.dart';
 import '../../domain/models/page_markup.dart';
 import '../../domain/repositories/markup_repository.dart';
 import '../../data/repositories/markup_repository_impl.dart';
@@ -12,7 +15,7 @@ final markupRepositoryProvider = Provider<MarkupRepository>((ref) {
 class DrawingsListState {
   final bool isLoading;
   final List<DrawingFile> drawings;
-  final Map<String, int> markupCountByDrawing; // total strokes + labels per drawing
+  final Map<String, int> markupCountByDrawing;
   final String? errorMessage;
 
   const DrawingsListState({
@@ -45,15 +48,55 @@ class DrawingsListState {
 
 class DrawingsListController extends StateNotifier<DrawingsListState> {
   final MarkupRepository _repository;
+  final ApiClient? _apiClient;
   final _uuid = const Uuid();
 
-  DrawingsListController(this._repository) : super(const DrawingsListState(isLoading: true)) {
+  DrawingsListController(this._repository, [this._apiClient]) : super(const DrawingsListState(isLoading: true)) {
     loadDrawings();
   }
 
   Future<void> loadDrawings() async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
+      // Sync remote drawings from backend if online
+      if (_apiClient != null) {
+        try {
+          final remoteList = await _apiClient.getDrawings();
+          final remoteIds = remoteList.map((e) => e['id']?.toString()).whereType<String>().toSet();
+
+          // Remove local drawings that have a remote fileUrl but were deleted on server
+          final currentLocal = await _repository.getDrawings();
+          for (final local in currentLocal) {
+            if (local.fileUrl != null && local.fileUrl!.isNotEmpty && !remoteIds.contains(local.id)) {
+              await _repository.deleteDrawing(local.id);
+            }
+          }
+
+          for (final item in remoteList) {
+            final id = item['id']?.toString() ?? '';
+            if (id.isNotEmpty) {
+              final existing = await _repository.getDrawing(id);
+              if (existing == null) {
+                final remoteDrawing = DrawingFile(
+                  id: id,
+                  name: item['name']?.toString() ?? 'Untitled',
+                  fileType: item['fileType']?.toString() ?? 'IMAGE',
+                  pageCount: (item['pageCount'] as num?)?.toInt() ?? 1,
+                  localPath: '',
+                  fileUrl: item['fileUrl']?.toString(),
+                  createdAt: item['createdAt'] != null
+                      ? DateTime.tryParse(item['createdAt'].toString()) ?? DateTime.now()
+                      : DateTime.now(),
+                );
+                await _repository.saveDrawing(remoteDrawing);
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('[DrawingsListController] Remote sync check: $e');
+        }
+      }
+
       final list = await _repository.getDrawings();
       final markupCounts = <String, int>{};
 
@@ -84,15 +127,57 @@ class DrawingsListController extends StateNotifier<DrawingsListState> {
     required String name,
     required String fileType,
     required String localPath,
+    Uint8List? fileBytes,
     int pageCount = 1,
+    String? jobNumber,
+    String? drawingNumber,
+    String? revision,
+    String? projectName,
+    String? title,
+    List<DrawingTextToken>? extractedTokens,
   }) async {
+    String? remoteFileUrl;
+    String id = 'dwg-${_uuid.v4().substring(0, 8)}';
+
+    // 1. Attempt upload to backend REST API if ApiClient is configured
+    if (_apiClient != null) {
+      try {
+        final uploadResult = await _apiClient.uploadDrawing(
+          fileName: name,
+          filePath: localPath,
+          fileBytes: fileBytes,
+        );
+        if (uploadResult != null) {
+          if (uploadResult['id'] != null) {
+            id = uploadResult['id'].toString();
+          }
+          if (uploadResult['fileUrl'] != null) {
+            remoteFileUrl = uploadResult['fileUrl'].toString();
+          }
+          if (uploadResult['pageCount'] != null && uploadResult['pageCount'] is int) {
+            pageCount = uploadResult['pageCount'] as int;
+          }
+        }
+      } catch (e) {
+        debugPrint('[DrawingsListController] Remote drawing upload error: $e');
+      }
+    }
+
+    // 2. Persist locally to SQLite (Offline-First guarantee)
     final drawing = DrawingFile(
-      id: 'dwg-${_uuid.v4().substring(0, 8)}',
+      id: id,
       name: name,
       fileType: fileType,
       pageCount: pageCount,
       localPath: localPath,
+      fileUrl: remoteFileUrl,
       createdAt: DateTime.now(),
+      jobNumber: jobNumber,
+      drawingNumber: drawingNumber,
+      revision: revision,
+      projectName: projectName,
+      title: title,
+      extractedTokens: extractedTokens ?? const [],
     );
 
     await _repository.saveDrawing(drawing);
@@ -101,6 +186,13 @@ class DrawingsListController extends StateNotifier<DrawingsListState> {
   }
 
   Future<void> deleteDrawing(String id) async {
+    if (_apiClient != null) {
+      try {
+        await _apiClient.deleteDrawing(id);
+      } catch (e) {
+        debugPrint('[DrawingsListController] Remote delete error: $e');
+      }
+    }
     await _repository.deleteDrawing(id);
     await loadDrawings();
   }
@@ -109,5 +201,6 @@ class DrawingsListController extends StateNotifier<DrawingsListState> {
 final drawingsListControllerProvider =
     StateNotifierProvider<DrawingsListController, DrawingsListState>((ref) {
   final repo = ref.watch(markupRepositoryProvider);
-  return DrawingsListController(repo);
+  final apiClient = ref.watch(apiClientProvider);
+  return DrawingsListController(repo, apiClient);
 });

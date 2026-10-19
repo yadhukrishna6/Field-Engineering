@@ -18,7 +18,10 @@ enum AnnotationType {
   text('text'),
   dimension('dimension'),
   photoPin('photoPin'),
-  voicePin('voicePin');
+  voicePin('voicePin'),
+  noteBox('noteBox'),
+  stamp('stamp'),
+  strikeOut('strikeOut');
 
   final String code;
   const AnnotationType(this.code);
@@ -31,6 +34,44 @@ enum AnnotationType {
   }
 }
 
+class AttachedTag {
+  final String text;
+  final List<double>? bbox;
+
+  const AttachedTag({
+    required this.text,
+    this.bbox,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'text': text,
+    if (bbox != null) 'bbox': bbox,
+  };
+
+  factory AttachedTag.fromJson(Map<String, dynamic> json) {
+    return AttachedTag(
+      text: json['text'] as String? ?? '',
+      bbox: (json['bbox'] as List?)?.map((e) => (e as num).toDouble()).toList(),
+    );
+  }
+}
+
+class GpsCoord {
+  final double lat;
+  final double lng;
+
+  const GpsCoord({required this.lat, required this.lng});
+
+  Map<String, dynamic> toJson() => {'lat': lat, 'lng': lng};
+
+  factory GpsCoord.fromJson(Map<String, dynamic> json) {
+    return GpsCoord(
+      lat: (json['lat'] as num?)?.toDouble() ?? 0.0,
+      lng: (json['lng'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
 class AnnotationItem {
   final String id;
   final AnnotationType type;
@@ -38,12 +79,26 @@ class AnnotationItem {
   final Color color;
   final double strokeWidth;
   final List<Point2D> points;
-  final List<Point2D>? rawPoints; // original raw stroke for single-tap "Undo snap"
+  final List<Point2D>? rawPoints;
   final String? text;
-  final String? size; // 'S', 'M', 'L'
-  final Map<String, dynamic>? metadata; // scale, dimensions, photo path, audio path, etc.
+  final String? size;
+  final Map<String, dynamic>? metadata;
 
-  const AnnotationItem({
+  final String? changeType;
+  final int? quantity;
+  final String? unit;
+  final double? value;
+  final AttachedTag? attachedTag;
+  final List<String>? photoIds;
+  final GpsCoord? gps;
+  final String? author;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final String? status;
+  final bool isConflictCopy;
+  final String? conflictOriginalId;
+
+  AnnotationItem({
     required this.id,
     required this.type,
     this.layer = MarkupLayer.markups,
@@ -54,7 +109,21 @@ class AnnotationItem {
     this.text,
     this.size,
     this.metadata,
-  });
+    this.changeType,
+    this.quantity,
+    this.unit,
+    this.value,
+    this.attachedTag,
+    this.photoIds,
+    this.gps,
+    this.author,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    this.status,
+    this.isConflictCopy = false,
+    this.conflictOriginalId,
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
 
   double get fontSize {
     switch ((size ?? 'M').toUpperCase()) {
@@ -80,6 +149,19 @@ class AnnotationItem {
     String? text,
     String? size,
     Map<String, dynamic>? metadata,
+    String? changeType,
+    int? quantity,
+    String? unit,
+    double? value,
+    AttachedTag? attachedTag,
+    List<String>? photoIds,
+    GpsCoord? gps,
+    String? author,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? status,
+    bool? isConflictCopy,
+    String? conflictOriginalId,
   }) {
     return AnnotationItem(
       id: id ?? this.id,
@@ -92,10 +174,22 @@ class AnnotationItem {
       text: text ?? this.text,
       size: size ?? this.size,
       metadata: metadata ?? this.metadata,
+      changeType: changeType ?? this.changeType,
+      quantity: quantity ?? this.quantity,
+      unit: unit ?? this.unit,
+      value: value ?? this.value,
+      attachedTag: attachedTag ?? this.attachedTag,
+      photoIds: photoIds ?? this.photoIds,
+      gps: gps ?? this.gps,
+      author: author ?? this.author,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? DateTime.now(),
+      status: status ?? this.status,
+      isConflictCopy: isConflictCopy ?? this.isConflictCopy,
+      conflictOriginalId: conflictOriginalId ?? this.conflictOriginalId,
     );
   }
 
-  // Convert legacy Stroke into AnnotationItem
   static AnnotationItem fromStroke(Stroke stroke, {MarkupLayer layer = MarkupLayer.markups}) {
     return AnnotationItem(
       id: 'strk-${DateTime.now().microsecondsSinceEpoch}',
@@ -107,7 +201,6 @@ class AnnotationItem {
     );
   }
 
-  // Convert legacy TextLabel into AnnotationItem
   static AnnotationItem fromTextLabel(TextLabel label, {MarkupLayer layer = MarkupLayer.markups}) {
     return AnnotationItem(
       id: label.id,
@@ -132,6 +225,19 @@ class AnnotationItem {
     if (text != null) 'text': text,
     if (size != null) 'size': size,
     if (metadata != null) 'metadata': metadata,
+    if (changeType != null) 'changeType': changeType,
+    if (quantity != null) 'quantity': quantity,
+    if (unit != null) 'unit': unit,
+    if (value != null) 'value': value,
+    if (attachedTag != null) 'attachedTag': attachedTag!.toJson(),
+    if (photoIds != null) 'photoIds': photoIds,
+    if (gps != null) 'gps': gps!.toJson(),
+    if (author != null) 'author': author,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+    if (status != null) 'status': status,
+    'isConflictCopy': isConflictCopy,
+    if (conflictOriginalId != null) 'conflictOriginalId': conflictOriginalId,
   };
 
   factory AnnotationItem.fromJson(Map<String, dynamic> json) {
@@ -152,6 +258,27 @@ class AnnotationItem {
       text: json['text'] as String?,
       size: json['size'] as String?,
       metadata: json['metadata'] as Map<String, dynamic>?,
+      changeType: json['changeType'] as String?,
+      quantity: (json['quantity'] as num?)?.toInt(),
+      unit: json['unit'] as String?,
+      value: (json['value'] as num?)?.toDouble(),
+      attachedTag: json['attachedTag'] != null
+          ? AttachedTag.fromJson(json['attachedTag'] as Map<String, dynamic>)
+          : null,
+      photoIds: (json['photoIds'] as List?)?.map((e) => e.toString()).toList(),
+      gps: json['gps'] != null
+          ? GpsCoord.fromJson(json['gps'] as Map<String, dynamic>)
+          : null,
+      author: json['author'] as String?,
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
+          : DateTime.now(),
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.tryParse(json['updatedAt'] as String) ?? DateTime.now()
+          : DateTime.now(),
+      status: json['status'] as String?,
+      isConflictCopy: json['isConflictCopy'] as bool? ?? false,
+      conflictOriginalId: json['conflictOriginalId'] as String?,
     );
   }
 }

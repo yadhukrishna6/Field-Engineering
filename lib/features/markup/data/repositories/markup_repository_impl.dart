@@ -63,7 +63,7 @@ class MarkupRepositoryImpl implements MarkupRepository {
         await _ensureTables(db);
         await db.insert(
           'drawing_files',
-          drawing.toJson(),
+          drawing.toDbMap(),
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       } catch (e) {
@@ -151,9 +151,31 @@ class MarkupRepositoryImpl implements MarkupRepository {
         pageCount INTEGER NOT NULL,
         localPath TEXT NOT NULL,
         fileUrl TEXT,
-        createdAt TEXT NOT NULL
+        createdAt TEXT NOT NULL,
+        jobNumber TEXT,
+        drawingNumber TEXT,
+        revision TEXT,
+        projectName TEXT,
+        title TEXT,
+        extractedTokens TEXT,
+        status TEXT
       )
     ''');
+
+    for (final col in [
+      'jobNumber TEXT',
+      'drawingNumber TEXT',
+      'revision TEXT',
+      'projectName TEXT',
+      'title TEXT',
+      'extractedTokens TEXT',
+      'status TEXT',
+    ]) {
+      try {
+        await db.execute('ALTER TABLE drawing_files ADD COLUMN $col');
+      } catch (_) {}
+    }
+
     await db.execute('''
       CREATE TABLE IF NOT EXISTS page_markups (
         drawingId TEXT NOT NULL,

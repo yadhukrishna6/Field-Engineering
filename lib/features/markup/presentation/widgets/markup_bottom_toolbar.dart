@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/glove_mode_controller.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../controllers/markup_editor_controller.dart';
-import 'theme_selector_modal.dart';
+import 'quick_notes_sheet.dart';
+import 'stamps_sheet.dart';
 
 class MarkupBottomToolbar extends ConsumerWidget {
   final MarkupEditorState state;
@@ -17,11 +19,30 @@ class MarkupBottomToolbar extends ConsumerWidget {
     required this.onResetZoom,
   });
 
+  String _getColorMeaningTooltip(Color color) {
+    if (color == const Color(0xFFD03A33) || color == const Color(0xFFC62828)) {
+      return 'Red - Revision / Delete / Replace';
+    } else if (color == const Color(0xFF1E88E5) || color == const Color(0xFF185FA5)) {
+      return 'Blue - Client Comment / Relocate / Verify';
+    } else if (color == const Color(0xFF2E7D32) || color == const Color(0xFF1F6B2D)) {
+      return 'Green - Approved / Dimension';
+    } else if (color == const Color(0xFFE06A26) || color == const Color(0xFFC25E00)) {
+      return 'Orange - Add / Hold / Caution';
+    } else if (color == const Color(0xFF111111) || color == const Color(0xFF212121)) {
+      return 'Black - General / Neutral';
+    }
+    return 'Color Preset';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeState = ref.watch(themeControllerProvider);
     final isOutdoor = themeState.isOutdoorActive;
     final isDark = themeState.isDarkActive;
+    final gloveState = ref.watch(gloveModeProvider);
+    final isGlove = gloveState.isGloveMode;
+    final minTouchTarget = gloveState.minTouchTarget(isOutdoor);
+    final iconSize = gloveState.iconSize(isOutdoor);
 
     final surfaceColor = isOutdoor
         ? AppColors.outdoorSurface
@@ -40,12 +61,12 @@ class MarkupBottomToolbar extends ConsumerWidget {
     final activeColorPresets = themeState.colorPresets;
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: isOutdoor ? 16 : 14, vertical: isOutdoor ? 8 : 6),
+      padding: EdgeInsets.symmetric(horizontal: isGlove ? 8 : 12, vertical: isGlove ? 8 : 6),
       decoration: BoxDecoration(
-        color: surfaceColor.withOpacity(0.98),
+        color: surfaceColor,
         border: Border(top: BorderSide(color: outlineColor, width: isOutdoor ? 1.5 : 1.0)),
         boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, -2)),
+          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, -1)),
         ],
       ),
       child: SafeArea(
@@ -53,141 +74,256 @@ class MarkupBottomToolbar extends ConsumerWidget {
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Layers toggle button (Min 48dp touch target)
-              IconButton(
-                style: isOutdoor ? IconButton.styleFrom(minimumSize: const Size(48, 48)) : null,
-                icon: Icon(
-                  state.isLayersPanelOpen ? Icons.layers_rounded : Icons.layers_outlined,
-                  color: state.isLayersPanelOpen ? primaryColor : textColor,
-                  size: isOutdoor ? 24 : 20,
-                ),
-                tooltip: 'Toggle Layers Panel',
-                onPressed: () => controller.toggleLayersPanel(),
-              ),
-              const SizedBox(width: 4),
-
-              // Theme Selector quick-switch
-              IconButton(
-                style: isOutdoor ? IconButton.styleFrom(minimumSize: const Size(48, 48)) : null,
-                icon: Icon(
-                  isOutdoor ? Icons.wb_sunny_rounded : (isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded),
-                  color: primaryColor,
-                  size: isOutdoor ? 22 : 18,
-                ),
-                tooltip: 'Theme: ${themeState.themeMode.label}',
-                onPressed: () => ThemeSelectorModal.show(context),
-              ),
-              const SizedBox(width: 4),
-
-              // Color Preset Dots (5 in Outdoor mode, 7 in Standard/Dark)
+              // Left: Layers Toggle, Quick-Notes & Stamps Shortcut
               Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Layers Panel Toggle
+                  InkWell(
+                    onTap: () => controller.toggleLayersPanel(),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      constraints: BoxConstraints(minHeight: minTouchTarget, minWidth: minTouchTarget),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: state.isLayersPanelOpen ? primaryColor.withOpacity(0.18) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: state.isLayersPanelOpen ? primaryColor : outlineColor,
+                          width: isOutdoor ? 1.5 : 1.0,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.layers_rounded, size: iconSize - 4, color: state.isLayersPanelOpen ? primaryColor : textColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Layers',
+                            style: TextStyle(
+                              fontSize: isOutdoor ? 12 : 11,
+                              fontWeight: FontWeight.bold,
+                              color: state.isLayersPanelOpen ? primaryColor : textColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+
+                  // Quick-Notes Button (Phase B)
+                  InkWell(
+                    onTap: () async {
+                      final chosen = await QuickNotesSheet.show(context, isOutdoor: isOutdoor, isDark: isDark);
+                      if (chosen != null) {
+                        controller.setQuickNoteType(chosen, isOutdoor);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      constraints: BoxConstraints(minHeight: minTouchTarget, minWidth: minTouchTarget),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: state.selectedTool == MarkupTool.quickNote ? primaryColor.withOpacity(0.18) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: state.selectedTool == MarkupTool.quickNote ? primaryColor : outlineColor,
+                          width: isOutdoor ? 1.5 : 1.0,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.bolt_rounded, size: iconSize - 4, color: state.selectedTool == MarkupTool.quickNote ? primaryColor : textColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            state.selectedTool == MarkupTool.quickNote && state.activeQuickNoteType != null
+                                ? state.activeQuickNoteType!.label
+                                : 'Quick Note',
+                            style: TextStyle(
+                              fontSize: isOutdoor ? 12 : 11,
+                              fontWeight: FontWeight.bold,
+                              color: state.selectedTool == MarkupTool.quickNote ? primaryColor : textColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+
+                  // Stamps Button (Phase B)
+                  InkWell(
+                    onTap: () async {
+                      final stamp = await StampsSheet.show(context, isOutdoor: isOutdoor, isDark: isDark);
+                      if (stamp != null) {
+                        controller.setStampType(stamp, isOutdoor);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      constraints: BoxConstraints(minHeight: minTouchTarget, minWidth: minTouchTarget),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: state.selectedTool == MarkupTool.stamp ? primaryColor.withOpacity(0.18) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: state.selectedTool == MarkupTool.stamp ? primaryColor : outlineColor,
+                          width: isOutdoor ? 1.5 : 1.0,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.approval_rounded, size: iconSize - 4, color: state.selectedTool == MarkupTool.stamp ? primaryColor : textColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Stamps',
+                            style: TextStyle(
+                              fontSize: isOutdoor ? 12 : 11,
+                              fontWeight: FontWeight.bold,
+                              color: state.selectedTool == MarkupTool.stamp ? primaryColor : textColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(width: 12),
+
+              // Center: Preset Color Dots with Tooltips
+              Row(
+                mainAxisSize: MainAxisSize.min,
                 children: activeColorPresets.map((color) {
                   final isSelected = state.activeColor.value == color.value;
-                  final dotSize = isOutdoor ? 30.0 : 24.0;
-                  final touchSize = isOutdoor ? 48.0 : 32.0;
+                  final dotSize = isGlove ? 34.0 : (isOutdoor ? 30.0 : 26.0);
 
-                  return GestureDetector(
-                    onTap: () => controller.setColor(color),
-                    child: Container(
-                      width: touchSize,
-                      height: touchSize,
-                      alignment: Alignment.center,
-                      child: Container(
-                        width: dotSize,
-                        height: dotSize,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected ? (isOutdoor ? AppColors.outdoorText : Colors.white) : outlineColor,
-                            width: isSelected ? 3.0 : 1.2,
+                  return Tooltip(
+                    message: _getColorMeaningTooltip(color),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: isGlove ? 4 : 3),
+                      child: InkWell(
+                        onTap: () => controller.setColor(color),
+                        borderRadius: BorderRadius.circular(dotSize / 2),
+                        child: Container(
+                          width: dotSize,
+                          height: dotSize,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isSelected ? primaryColor : (isOutdoor ? AppColors.outdoorOutline : Colors.black26),
+                              width: isSelected ? 3.0 : 1.5,
+                            ),
+                            boxShadow: isSelected
+                                ? [BoxShadow(color: primaryColor.withOpacity(0.4), blurRadius: 6, spreadRadius: 1)]
+                                : null,
                           ),
-                          boxShadow: isSelected
-                              ? [const BoxShadow(color: Colors.black38, blurRadius: 4, offset: Offset(0, 1))]
+                          child: isSelected
+                              ? const Center(child: Icon(Icons.check_rounded, size: 16, color: Colors.white))
                               : null,
                         ),
-                        child: isSelected ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
                       ),
                     ),
                   );
                 }).toList(),
               ),
-              const SizedBox(width: 8),
 
-              // Stroke Width Slider
-              SizedBox(
-                width: isOutdoor ? 120 : 100,
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: isOutdoor ? 4 : 3,
-                    thumbShape: RoundSliderThumbShape(enabledThumbRadius: isOutdoor ? 8 : 6),
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-                    activeTrackColor: primaryColor,
-                    inactiveTrackColor: outlineColor,
-                    thumbColor: primaryColor,
-                  ),
-                  child: Slider(
-                    value: state.activeStrokeWidth,
-                    min: 1.0,
-                    max: 12.0,
-                    onChanged: (val) => controller.setStrokeWidth(val),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 12),
 
-              // Undo (Min 48dp touch target)
-              IconButton(
-                style: isOutdoor ? IconButton.styleFrom(minimumSize: const Size(48, 48)) : null,
-                icon: Icon(Icons.undo_rounded, size: isOutdoor ? 22 : 20),
-                tooltip: 'Undo (or Undo Snap)',
-                onPressed: state.canUndo ? () => controller.undo() : null,
-              ),
-
-              // Redo (Min 48dp touch target)
-              IconButton(
-                style: isOutdoor ? IconButton.styleFrom(minimumSize: const Size(48, 48)) : null,
-                icon: Icon(Icons.redo_rounded, size: isOutdoor ? 22 : 20),
-                tooltip: 'Redo',
-                onPressed: state.canRedo ? () => controller.redo() : null,
-              ),
-
-              const SizedBox(width: 4),
-
-              // Zoom % Pill (Tap to reset)
-              InkWell(
-                onTap: onResetZoom,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: isOutdoor ? 10 : 8, vertical: isOutdoor ? 6 : 4),
-                  decoration: BoxDecoration(
-                    color: surfaceColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: outlineColor, width: isOutdoor ? 1.5 : 1.0),
-                  ),
-                  child: Text(
-                    '$zoomPct%',
-                    style: TextStyle(
-                      fontSize: isOutdoor ? 13 : 11,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
+              // Right: Glove Mode Toggle, Wipe Lock Toggle, Zoom & Undo/Redo
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Glove Mode Toggle
+                  Tooltip(
+                    message: isGlove ? 'Glove Mode Active (>= 56dp touch targets)' : 'Enable Glove Mode',
+                    child: InkWell(
+                      onTap: () {
+                        ref.read(gloveModeProvider.notifier).toggleGloveMode();
+                        controller.setGloveMode(!isGlove);
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        constraints: BoxConstraints(minHeight: minTouchTarget, minWidth: minTouchTarget),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isGlove ? primaryColor.withOpacity(0.2) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: isGlove ? primaryColor : outlineColor, width: isOutdoor ? 1.5 : 1.0),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.sports_handball_rounded, size: iconSize - 4, color: isGlove ? primaryColor : textColor),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Glove',
+                              style: TextStyle(
+                                fontSize: isOutdoor ? 11 : 10,
+                                fontWeight: FontWeight.bold,
+                                color: isGlove ? primaryColor : textColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 6),
+                  const SizedBox(width: 6),
 
-              // Fullscreen Toggle
-              IconButton(
-                style: isOutdoor ? IconButton.styleFrom(minimumSize: const Size(48, 48)) : null,
-                icon: Icon(
-                  state.isFullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
-                  size: isOutdoor ? 24 : 20,
-                  color: textColor,
-                ),
-                tooltip: state.isFullscreen ? 'Exit Fullscreen' : 'Fullscreen',
-                onPressed: () => controller.toggleFullscreen(),
+                  // Wipe Lock Toggle
+                  Tooltip(
+                    message: state.isWipeLocked ? 'Canvas Frozen (Wipe Lock)' : 'Lock Canvas to Wipe Screen Dust',
+                    child: IconButton(
+                      icon: Icon(
+                        state.isWipeLocked ? Icons.lock_rounded : Icons.lock_outline_rounded,
+                        color: state.isWipeLocked ? primaryColor : textColor,
+                        size: iconSize - 2,
+                      ),
+                      onPressed: () => controller.toggleWipeLock(),
+                    ),
+                  ),
+
+                  // Undo / Redo
+                  IconButton(
+                    icon: Icon(Icons.undo_rounded, size: iconSize - 4),
+                    color: state.canUndo ? textColor : textColor.withOpacity(0.3),
+                    tooltip: 'Undo (reverts snap / stroke)',
+                    onPressed: state.canUndo ? () => controller.undo() : null,
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.redo_rounded, size: iconSize - 4),
+                    color: state.canRedo ? textColor : textColor.withOpacity(0.3),
+                    tooltip: 'Redo',
+                    onPressed: state.canRedo ? () => controller.redo() : null,
+                  ),
+
+                  // Zoom Percentage Chip
+                  InkWell(
+                    onTap: onResetZoom,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      constraints: BoxConstraints(minHeight: minTouchTarget * 0.7),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isOutdoor ? AppColors.outdoorChip : AppColors.lightChip,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: outlineColor, width: isOutdoor ? 1.5 : 1.0),
+                      ),
+                      child: Text(
+                        '$zoomPct%',
+                        style: TextStyle(
+                          fontSize: isOutdoor ? 12 : 11,
+                          fontWeight: FontWeight.bold,
+                          color: primaryColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
