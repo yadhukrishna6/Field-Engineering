@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/api/api_endpoints.dart';
 import '../../../../core/theme/glove_mode_controller.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../domain/models/annotation_item.dart';
@@ -20,7 +22,7 @@ import '../widgets/drawing_canvas_painter.dart';
 import '../widgets/drawing_search_bar.dart';
 import '../widgets/export_share_hub_sheet.dart';
 import '../widgets/field_calculations_sheet.dart';
-
+import '../widgets/font_selector_sheet.dart';
 import '../widgets/layers_panel.dart';
 import '../widgets/markup_bottom_toolbar.dart';
 import '../widgets/minimap_view.dart';
@@ -105,6 +107,96 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
       compareRevisionName: widget.drawing.revision ?? 'Rev 1 (Field)',
       isOutdoor: isOutdoor,
       isDark: isDark,
+    );
+  }
+
+  void _showJobNumberDialog(BuildContext context, MarkupEditorState state, MarkupEditorController controller) {
+    final textController = TextEditingController(text: state.jobSuffix);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.tag_rounded, color: Color(0xFF1E88E5)),
+            SizedBox(width: 8),
+            Text('Job Number (Last 3 Digits)'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Job Prefix is standard for this project. Only the last 3 digits change per document.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    state.jobPrefix,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'JetBrainsMono', fontSize: 15),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: textController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 3,
+                    autofocus: true,
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontFamily: 'JetBrainsMono', fontSize: 18),
+                    decoration: const InputDecoration(
+                      hintText: '001',
+                      border: OutlineInputBorder(),
+                      counterText: '',
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                TextButton.icon(
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('+1 Next Job'),
+                  onPressed: () {
+                    final curr = int.tryParse(textController.text) ?? 1;
+                    textController.text = (curr + 1).toString().padLeft(3, '0');
+                  },
+                ),
+                Text(
+                  'Full: ${state.jobPrefix}${textController.text}',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              controller.setJobSuffix(textController.text);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save Job Number'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -531,7 +623,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                     children: [
                       // Interactive Drawing Canvas (White paper in ALL themes)
                       Positioned.fill(
-                        child: _buildCanvasArea(state, controller, isDark, gloveState.tapDistanceThreshold),
+                        child: _buildCanvasArea(state, controller, isDark, isOutdoor, gloveState.tapDistanceThreshold),
                       ),
 
                       // Top-Left Smart Snap Chip
@@ -625,6 +717,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
             state: state,
             controller: controller,
             onResetZoom: _handleResetZoom,
+            onEditJobNumber: () => _showJobNumberDialog(context, state, controller),
           ),
         ],
       ),
@@ -699,7 +792,12 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                     controller.selectTool(MarkupTool.quickNote);
                   }
                 } else if (tool == MarkupTool.stamp) {
-                  final stamp = await StampsSheet.show(context, isOutdoor: isOutdoor, isDark: isDark);
+                  final stamp = await StampsSheet.show(
+                    context,
+                    isOutdoor: isOutdoor,
+                    isDark: isDark,
+                    onApplyStandardSet: () => controller.applyStandardTitleBlockSealSet(),
+                  );
                   if (stamp != null) {
                     controller.setStampType(stamp, isOutdoor);
                   } else {
@@ -815,7 +913,12 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                     controller.selectTool(MarkupTool.quickNote);
                   }
                 } else if (tool == MarkupTool.stamp) {
-                  final stamp = await StampsSheet.show(context, isOutdoor: isOutdoor, isDark: isDark);
+                  final stamp = await StampsSheet.show(
+                    context,
+                    isOutdoor: isOutdoor,
+                    isDark: isDark,
+                    onApplyStandardSet: () => controller.applyStandardTitleBlockSealSet(),
+                  );
                   if (stamp != null) {
                     controller.setStampType(stamp, isOutdoor);
                   } else {
@@ -865,6 +968,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
     MarkupEditorState state,
     MarkupEditorController controller,
     bool isDark,
+    bool isOutdoor,
     double tapTolerance,
   ) {
     final showOriginal = state.layerVisibility[MarkupLayer.originalDrawing] ?? true;
@@ -893,7 +997,11 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                   return;
                 }
 
-                if (!state.allowFingerDrawing && event.kind != PointerDeviceKind.stylus) {
+                final isStylusOrPointer = event.kind == PointerDeviceKind.stylus ||
+                    event.kind == PointerDeviceKind.mouse ||
+                    event.kind == PointerDeviceKind.trackpad;
+
+                if (!state.allowFingerDrawing && !isStylusOrPointer) {
                   return;
                 }
 
@@ -969,15 +1077,46 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                     attachedTag: attachedTag,
                   );
                 } else if (state.selectedTool == MarkupTool.stamp) {
-                  // Phase B: One tap places official stamp
-                  final sType = state.activeStampType ?? StampType.approved;
-                  final themeState = ref.read(themeControllerProvider);
-                  controller.addStamp(
-                    stampTitle: sType.title,
-                    color: sType.getColor(themeState.isOutdoorActive),
-                    x: p.x,
-                    y: p.y,
-                  );
+                  // Check if user tapped an existing stamp/seal to select/drag it
+                  AnnotationItem? hitStamp;
+                  for (int i = state.annotations.length - 1; i >= 0; i--) {
+                    final a = state.annotations[i];
+                    if (a.isConflictCopy || a.points.isEmpty) continue;
+                    if (a.type == AnnotationType.stamp) {
+                      final origin = a.points.first;
+                      final code = a.metadata?['sealType'];
+                      double w = 0.16;
+                      double h = 0.08;
+                      if (code == 'qaQcSeal' || code == 'peSeal') {
+                        w = 0.11;
+                        h = 0.11;
+                      } else if (code == 'signature') {
+                        w = 0.18;
+                        h = 0.08;
+                      }
+                      if (p.x >= origin.x - 0.02 && p.x <= origin.x + w &&
+                          p.y >= origin.y - 0.02 && p.y <= origin.y + h) {
+                        hitStamp = a;
+                        break;
+                      }
+                    }
+                  }
+
+                  if (hitStamp != null) {
+                    controller.selectAnnotation(hitStamp.id);
+                    _isDraggingAnnotation = true;
+                  } else {
+                    // Place new stamp / seal / signature
+                    final sType = state.activeStampType ?? StampType.approved;
+                    final themeState = ref.read(themeControllerProvider);
+                    controller.addStamp(
+                      stampTitle: sType.title,
+                      color: sType.getColor(themeState.isOutdoorActive),
+                      x: p.x,
+                      y: p.y,
+                      sealCode: sType.sealCode,
+                    );
+                  }
                 } else if (state.selectedTool == MarkupTool.noteBox) {
                   // Phase B: Note box placement dialog
                   final themeState = ref.read(themeControllerProvider);
@@ -994,20 +1133,28 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                   AnnotationItem? hitItem;
                   for (int i = state.annotations.length - 1; i >= 0; i--) {
                     final a = state.annotations[i];
-                    if (a.isConflictCopy) continue;
-                    if ((a.type == AnnotationType.text || a.type == AnnotationType.noteBox) && a.points.isNotEmpty) {
+                    if (a.isConflictCopy || a.points.isEmpty) continue;
+                    if ((a.type == AnnotationType.text || a.type == AnnotationType.noteBox || a.type == AnnotationType.stamp) && a.points.isNotEmpty) {
                       final origin = a.points.first;
-                      if (p.x >= origin.x - 0.04 && p.x <= origin.x + 0.20 &&
-                          p.y >= origin.y - 0.04 && p.y <= origin.y + 0.10) {
+                      if (p.x >= origin.x - 0.04 && p.x <= origin.x + 0.22 &&
+                          p.y >= origin.y - 0.04 && p.y <= origin.y + 0.12) {
                         hitItem = a;
                         break;
                       }
+                    } else if (a.type == AnnotationType.stroke || a.type == AnnotationType.line || a.type == AnnotationType.marker) {
+                      for (final pt in a.points) {
+                        if ((p.x - pt.x).abs() < 0.025 && (p.y - pt.y).abs() < 0.025) {
+                          hitItem = a;
+                          break;
+                        }
+                      }
+                      if (hitItem != null) break;
                     }
                   }
 
                   if (hitItem != null) {
                     controller.selectAnnotation(hitItem.id);
-                    _isDraggingAnnotation = true;
+                    _isDraggingAnnotation = (hitItem.type == AnnotationType.text || hitItem.type == AnnotationType.stamp || hitItem.type == AnnotationType.noteBox);
                   } else {
                     controller.selectAnnotation(null);
                     _isDraggingAnnotation = false;
@@ -1018,7 +1165,11 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
               },
               onPointerMove: (event) {
                 if (isLocked || state.isReadOnly) return;
-                if (!state.allowFingerDrawing && event.kind != PointerDeviceKind.stylus) {
+                final isStylusOrPointer = event.kind == PointerDeviceKind.stylus ||
+                    event.kind == PointerDeviceKind.mouse ||
+                    event.kind == PointerDeviceKind.trackpad;
+
+                if (!state.allowFingerDrawing && !isStylusOrPointer) {
                   return;
                 }
 
@@ -1026,10 +1177,8 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
 
                 if (state.selectedTool == MarkupTool.eraser) {
                   controller.eraseAt(p);
-                } else if (state.selectedTool == MarkupTool.text) {
-                  if (_isDraggingAnnotation && state.selectedAnnotationId != null) {
-                    controller.moveAnnotation(state.selectedAnnotationId!, p);
-                  }
+                } else if (_isDraggingAnnotation && state.selectedAnnotationId != null) {
+                  controller.moveAnnotation(state.selectedAnnotationId!, p);
                 } else if (state.selectedTool != MarkupTool.quickNote &&
                            state.selectedTool != MarkupTool.stamp &&
                            state.selectedTool != MarkupTool.noteBox &&
@@ -1041,24 +1190,28 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                 if (isLocked || state.isReadOnly) return;
                 final p = _screenToPage(event.position);
 
-                if (state.selectedTool == MarkupTool.text) {
-                  if (_isDraggingAnnotation) {
-                    _isDraggingAnnotation = false;
-                    controller.finishMoveLabel();
-                  } else if (_pointerDownPoint != null) {
+                if (_isDraggingAnnotation) {
+                  _isDraggingAnnotation = false;
+                  controller.finishMoveLabel();
+                } else if (state.selectedTool == MarkupTool.text) {
+                  if (_pointerDownPoint != null) {
                     final dist = (p.x - _pointerDownPoint!.x).abs() + (p.y - _pointerDownPoint!.y).abs();
                     if (dist < tapTolerance && state.selectedAnnotationId == null) {
                       AddLabelSheet.show(
                         context,
                         initialColor: state.activeColor,
                         initialSize: state.activeLabelSize,
-                        onConfirm: (text, size, color) {
+                        initialFontFamily: state.activeFontFamily,
+                        initialAlignment: state.activeTextAlignment,
+                        onConfirm: (text, size, color, fontFamily, alignment) {
                           controller.addLabel(
                             text: text,
                             x: p.x,
                             y: p.y,
                             size: size,
                             color: color,
+                            fontFamily: fontFamily,
+                            alignment: alignment,
                           );
                         },
                       );
@@ -1099,21 +1252,40 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                         if (state.selectedTool == MarkupTool.strikeOut) currentToolType = AnnotationType.strikeOut;
                         if (state.selectedTool == MarkupTool.shapes) currentToolType = state.selectedShape;
 
-                        return CustomPaint(
-                          size: size,
-                          painter: DrawingCanvasPainter(
-                            annotations: state.annotations,
-                            layerVisibility: state.layerVisibility,
-                            selectedAnnotationId: state.selectedAnnotationId,
-                            activeStrokePoints: state.activeStrokePoints,
-                            activeColor: state.activeColor,
-                            activeStrokeWidth: state.activeStrokeWidth,
-                            activeToolType: currentToolType,
-                            snapGuideLine: state.snapGuideLine,
-                            canvasSize: size,
-                            searchHighlightToken: state.searchHighlightToken,
-                            isAuthorVisible: (author) => state.isAuthorVisible(author),
-                          ),
+                        final selectedAnn = state.selectedAnnotationId != null
+                            ? state.annotations.where((a) => a.id == state.selectedAnnotationId).firstOrNull
+                            : null;
+
+                        return Stack(
+                          children: [
+                            CustomPaint(
+                              size: size,
+                              painter: DrawingCanvasPainter(
+                                annotations: state.annotations,
+                                layerVisibility: state.layerVisibility,
+                                selectedAnnotationId: state.selectedAnnotationId,
+                                activeStrokePoints: state.activeStrokePoints,
+                                activeColor: state.activeColor,
+                                activeStrokeWidth: state.activeStrokeWidth,
+                                activeToolType: currentToolType,
+                                snapGuideLine: state.snapGuideLine,
+                                canvasSize: size,
+                                searchHighlightToken: state.searchHighlightToken,
+                                isAuthorVisible: (author) => state.isAuthorVisible(author),
+                              ),
+                            ),
+                            // Floating Action Overlay for Selected Annotation
+                            if (selectedAnn != null && selectedAnn.points.isNotEmpty)
+                              _buildAnnotationActionOverlay(
+                                context: context,
+                                annotation: selectedAnn,
+                                canvasSize: size,
+                                controller: controller,
+                                state: state,
+                                isDark: isDark,
+                                isOutdoor: isOutdoor,
+                              ),
+                          ],
                         );
                       },
                     ),
@@ -1121,6 +1293,185 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnnotationActionOverlay({
+    required BuildContext context,
+    required AnnotationItem annotation,
+    required Size canvasSize,
+    required MarkupEditorController controller,
+    required MarkupEditorState state,
+    required bool isDark,
+    required bool isOutdoor,
+  }) {
+    final origin = annotation.points.first;
+    final px = (origin.x * canvasSize.width).clamp(16.0, math.max(16.0, canvasSize.width - 250.0)).toDouble();
+    final py = (origin.y * canvasSize.height - 46.0).clamp(8.0, math.max(8.0, canvasSize.height - 52.0)).toDouble();
+
+    final surfaceColor = isOutdoor
+        ? AppColors.outdoorSurface
+        : (isDark ? AppColors.darkSurface : AppColors.lightSurface);
+    final primaryColor = isOutdoor
+        ? AppColors.outdoorPrimary
+        : (isDark ? AppColors.darkPrimary : AppColors.lightPrimary);
+    final textColor = isOutdoor
+        ? AppColors.outdoorText
+        : (isDark ? AppColors.darkText : AppColors.lightText);
+
+    final isText = annotation.type == AnnotationType.text;
+    final isStroke = annotation.type == AnnotationType.stroke || annotation.type == AnnotationType.marker;
+
+    return Positioned(
+      left: px,
+      top: py,
+      child: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(10),
+        color: surfaceColor,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          decoration: BoxDecoration(
+            color: surfaceColor,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: primaryColor, width: 1.5),
+            boxShadow: const [
+              BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 3)),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isText) ...[
+                // Edit Text Button
+                InkWell(
+                  onTap: () {
+                    AddLabelSheet.show(
+                      context,
+                      initialColor: annotation.color,
+                      initialSize: annotation.size ?? 'M',
+                      initialFontFamily: annotation.metadata?['fontFamily'] ?? state.activeFontFamily,
+                      initialAlignment: annotation.metadata?['alignment'] ?? state.activeTextAlignment,
+                      initialText: annotation.text,
+                      onConfirm: (text, size, color, fontFamily, alignment) {
+                        controller.updateLabel(
+                          annotationId: annotation.id,
+                          text: text,
+                          size: size,
+                          color: color,
+                          fontFamily: fontFamily,
+                          alignment: alignment,
+                        );
+                      },
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit_rounded, size: 14, color: primaryColor),
+                        const SizedBox(width: 4),
+                        Text('Edit', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: textColor)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+
+                // Font Button
+                InkWell(
+                  onTap: () {
+                    FontSelectorSheet.show(
+                      context,
+                      activeFontId: annotation.metadata?['fontFamily'] ?? state.activeFontFamily,
+                      activeAlignment: annotation.metadata?['alignment'] ?? state.activeTextAlignment,
+                      isDark: isDark,
+                      isOutdoor: isOutdoor,
+                      onSelectFont: (fontId) => controller.setActiveFont(fontId),
+                      onSelectAlignment: (alignment) => controller.setTextAlignment(alignment),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.font_download_rounded, size: 14, color: primaryColor),
+                        const SizedBox(width: 4),
+                        Text('Font', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: textColor)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
+
+              if (isStroke) ...[
+                // Convert Stroke to Aligned Downloaded Font
+                InkWell(
+                  onTap: () {
+                    AddLabelSheet.show(
+                      context,
+                      initialColor: annotation.color,
+                      initialSize: 'M',
+                      initialFontFamily: state.activeFontFamily,
+                      initialAlignment: state.activeTextAlignment,
+                      initialText: 'SL6',
+                      onConfirm: (text, size, color, fontFamily, alignment) {
+                        controller.convertAnnotationToText(
+                          annotationId: annotation.id,
+                          text: text,
+                          fontFamily: fontFamily,
+                          alignment: alignment,
+                          size: size,
+                          color: color,
+                        );
+                      },
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.text_format_rounded, size: 14, color: primaryColor),
+                        const SizedBox(width: 4),
+                        Text('Align to Font (SL6)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: primaryColor)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
+
+              // Delete Button
+              if (!state.isReadOnly)
+                InkWell(
+                  onTap: () => controller.deleteSelectedLabel(),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    child: Icon(Icons.delete_outline_rounded, size: 16, color: Colors.redAccent.shade700),
+                  ),
+                ),
+
+              // Close / Deselect Button
+              InkWell(
+                onTap: () => controller.selectAnnotation(null),
+                borderRadius: BorderRadius.circular(6),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  child: Icon(Icons.close_rounded, size: 16, color: Colors.grey),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1136,9 +1487,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
         errorBuilder: (_, __, ___) => _buildBlueprintPlaceholder(),
       );
     } else if (drawing.fileUrl != null && drawing.fileUrl!.isNotEmpty && !drawing.isPdf) {
-      final url = drawing.fileUrl!.startsWith('http')
-          ? drawing.fileUrl!
-          : 'http://localhost:8081${drawing.fileUrl}';
+      final url = ApiEndpoints.resolveUrl(drawing.fileUrl!);
       return Image.network(
         url,
         fit: BoxFit.contain,

@@ -269,6 +269,25 @@ class DrawingCanvasPainter extends CustomPainter {
   void _paintStamp(Canvas canvas, Size size, AnnotationItem ann, {required bool isSelected}) {
     if (ann.points.isEmpty || ann.text == null) return;
 
+    final sealType = ann.metadata?['sealType'];
+    if (sealType == 'qaQcSeal') {
+      _paintQaQcSeal(canvas, size, ann, isSelected: isSelected);
+      return;
+    } else if (sealType == 'safetySeal') {
+      _paintSafetySeal(canvas, size, ann, isSelected: isSelected);
+      return;
+    } else if (sealType == 'peSeal') {
+      _paintPeSeal(canvas, size, ann, isSelected: isSelected);
+      return;
+    } else if (sealType == 'signature') {
+      _paintSignature(canvas, size, ann, isSelected: isSelected);
+      return;
+    } else if (sealType == 'jobNumber') {
+      _paintJobNumberBadge(canvas, size, ann, isSelected: isSelected);
+      return;
+    }
+
+    // Default engineering status stamp (APPROVED FOR CONSTRUCTION, etc.)
     final originX = ann.points.first.x * size.width;
     final originY = ann.points.first.y * size.height;
 
@@ -318,6 +337,229 @@ class DrawingCanvasPainter extends CustomPainter {
 
     titlePainter.paint(canvas, Offset(originX + 12, originY + 8));
     subPainter.paint(canvas, Offset(originX + 12, originY + 26));
+
+    if (isSelected) {
+      _drawBoundingHalo(canvas, boxRect, ann.color);
+    }
+  }
+
+  void _paintQaQcSeal(Canvas canvas, Size size, AnnotationItem ann, {required bool isSelected}) {
+    final originX = ann.points.first.x * size.width;
+    final originY = ann.points.first.y * size.height;
+    const radius = 40.0;
+    final center = Offset(originX + radius, originY + radius);
+
+    // Subtle paper backing
+    canvas.drawCircle(center, radius, Paint()..color = Colors.white.withOpacity(0.90));
+
+    // Outer double ring
+    final outerRing = Paint()
+      ..color = ann.color
+      ..strokeWidth = 2.4
+      ..style = PaintingStyle.stroke;
+    canvas.drawCircle(center, radius - 1, outerRing);
+    canvas.drawCircle(center, radius - 6, outerRing..strokeWidth = 1.2);
+
+    // Inner texts
+    final t1 = TextPainter(
+      text: TextSpan(text: '★ QA / QC ★', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900, color: ann.color, letterSpacing: 1.0)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    t1.paint(canvas, Offset(center.dx - (t1.width / 2), center.dy - 22));
+
+    final t2 = TextPainter(
+      text: TextSpan(text: 'APPROVED', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: ann.color, letterSpacing: 1.2)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    t2.paint(canvas, Offset(center.dx - (t2.width / 2), center.dy - 8));
+
+    final dateStr = (ann.metadata?['date'] as String?)?.split(' ').first ?? '';
+    final t3 = TextPainter(
+      text: TextSpan(text: 'FIELD PASS • $dateStr', style: TextStyle(fontSize: 6.5, fontWeight: FontWeight.w700, color: ann.color.withOpacity(0.9))),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    t3.paint(canvas, Offset(center.dx - (t3.width / 2), center.dy + 8));
+
+    if (isSelected) {
+      _drawBoundingHalo(canvas, Rect.fromCircle(center: center, radius: radius + 2), ann.color);
+    }
+  }
+
+  void _paintSafetySeal(Canvas canvas, Size size, AnnotationItem ann, {required bool isSelected}) {
+    final originX = ann.points.first.x * size.width;
+    final originY = ann.points.first.y * size.height;
+    const width = 120.0;
+    const height = 54.0;
+    final boxRect = Rect.fromLTWH(originX, originY, width, height);
+
+    // Subtle paper backing
+    final rrect = RRect.fromRectAndRadius(boxRect, const Radius.circular(5));
+    canvas.drawRRect(rrect, Paint()..color = Colors.white.withOpacity(0.90));
+
+    // Outer & inner safety border
+    final borderPaint = Paint()
+      ..color = ann.color
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+    canvas.drawRRect(rrect, borderPaint);
+    canvas.drawRRect(rrect.deflate(3.0), borderPaint..strokeWidth = 1.0);
+
+    final header = TextPainter(
+      text: TextSpan(text: '🛡️ SAFETY COMPLIANCE', style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w900, color: ann.color, letterSpacing: 0.8)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    header.paint(canvas, Offset(originX + 8, originY + 7));
+
+    final main = TextPainter(
+      text: TextSpan(text: 'STRUCTURAL INTEGRITY', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900, color: ann.color, letterSpacing: 0.5)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    main.paint(canvas, Offset(originX + 8, originY + 21));
+
+    final dateStr = (ann.metadata?['date'] as String?)?.split(' ').first ?? '';
+    final footer = TextPainter(
+      text: TextSpan(text: 'ASME / OSHA CERTIFIED • $dateStr', style: TextStyle(fontSize: 6.8, fontWeight: FontWeight.w700, color: ann.color.withOpacity(0.85))),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    footer.paint(canvas, Offset(originX + 8, originY + 36));
+
+    if (isSelected) {
+      _drawBoundingHalo(canvas, boxRect, ann.color);
+    }
+  }
+
+  void _paintPeSeal(Canvas canvas, Size size, AnnotationItem ann, {required bool isSelected}) {
+    final originX = ann.points.first.x * size.width;
+    final originY = ann.points.first.y * size.height;
+    const radius = 42.0;
+    final center = Offset(originX + radius, originY + radius);
+
+    // Subtle paper backing
+    canvas.drawCircle(center, radius, Paint()..color = Colors.white.withOpacity(0.90));
+
+    // Notary / PE gear rim ticks
+    final tickPaint = Paint()
+      ..color = ann.color.withOpacity(0.8)
+      ..strokeWidth = 1.2;
+    for (int i = 0; i < 24; i++) {
+      final angle = (i * 2 * math.pi) / 24;
+      final p1 = Offset(center.dx + (radius - 4) * math.cos(angle), center.dy + (radius - 4) * math.sin(angle));
+      final p2 = Offset(center.dx + radius * math.cos(angle), center.dy + radius * math.sin(angle));
+      canvas.drawLine(p1, p2, tickPaint);
+    }
+
+    // Outer & inner ring
+    final ringPaint = Paint()
+      ..color = ann.color
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+    canvas.drawCircle(center, radius - 4, ringPaint);
+    canvas.drawCircle(center, radius - 10, ringPaint..strokeWidth = 1.0);
+
+    final t1 = TextPainter(
+      text: TextSpan(text: 'LICENSED P.E.', style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w900, color: ann.color, letterSpacing: 0.8)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    t1.paint(canvas, Offset(center.dx - (t1.width / 2), center.dy - 22));
+
+    final t2 = TextPainter(
+      text: TextSpan(text: 'PE-784920', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: ann.color, letterSpacing: 1.0)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    t2.paint(canvas, Offset(center.dx - (t2.width / 2), center.dy - 8));
+
+    final t3 = TextPainter(
+      text: TextSpan(text: 'FIELD EXECUTION', style: TextStyle(fontSize: 6.8, fontWeight: FontWeight.w800, color: ann.color.withOpacity(0.9))),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    t3.paint(canvas, Offset(center.dx - (t3.width / 2), center.dy + 8));
+
+    if (isSelected) {
+      _drawBoundingHalo(canvas, Rect.fromCircle(center: center, radius: radius + 2), ann.color);
+    }
+  }
+
+  void _paintSignature(Canvas canvas, Size size, AnnotationItem ann, {required bool isSelected}) {
+    final originX = ann.points.first.x * size.width;
+    final originY = ann.points.first.y * size.height;
+    const width = 130.0;
+    const height = 48.0;
+    final boxRect = Rect.fromLTWH(originX, originY, width, height);
+
+    // Subtle paper backing
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(boxRect, const Radius.circular(4)),
+      Paint()..color = Colors.white.withOpacity(0.90),
+    );
+
+    // Fluid vector signature curve
+    final sigPath = Path();
+    sigPath.moveTo(originX + 14, originY + 22);
+    sigPath.cubicTo(originX + 22, originY + 6, originX + 28, originY + 6, originX + 34, originY + 20);
+    sigPath.cubicTo(originX + 40, originY + 28, originX + 46, originY + 12, originX + 54, originY + 14);
+    sigPath.cubicTo(originX + 62, originY + 16, originX + 68, originY + 24, originX + 76, originY + 18);
+    sigPath.cubicTo(originX + 86, originY + 10, originX + 96, originY + 8, originX + 106, originY + 16);
+    // Flourish underline
+    sigPath.moveTo(originX + 18, originY + 26);
+    sigPath.quadraticBezierTo(originX + 65, originY + 30, originX + 116, originY + 24);
+
+    final sigPaint = Paint()
+      ..color = ann.color
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    canvas.drawPath(sigPath, sigPaint);
+
+    // Signer name and role
+    final signerPainter = TextPainter(
+      text: TextSpan(
+        text: 'Yadhukrishna, PE • Lead Field Eng',
+        style: TextStyle(fontSize: 7.2, fontWeight: FontWeight.bold, color: ann.color.withOpacity(0.9)),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    signerPainter.paint(canvas, Offset(originX + 14, originY + 32));
+
+    if (isSelected) {
+      _drawBoundingHalo(canvas, boxRect, ann.color);
+    }
+  }
+
+  void _paintJobNumberBadge(Canvas canvas, Size size, AnnotationItem ann, {required bool isSelected}) {
+    final originX = ann.points.first.x * size.width;
+    final originY = ann.points.first.y * size.height;
+    const width = 115.0;
+    const height = 38.0;
+    final boxRect = Rect.fromLTWH(originX, originY, width, height);
+
+    // Subtle paper backing
+    final rrect = RRect.fromRectAndRadius(boxRect, const Radius.circular(4));
+    canvas.drawRRect(rrect, Paint()..color = Colors.white.withOpacity(0.92));
+
+    final border = Paint()
+      ..color = ann.color
+      ..strokeWidth = 1.6
+      ..style = PaintingStyle.stroke;
+    canvas.drawRRect(rrect, border);
+
+    final labelPainter = TextPainter(
+      text: TextSpan(
+        text: 'PROJECT / JOB NUMBER',
+        style: TextStyle(fontSize: 7.0, fontWeight: FontWeight.w800, color: ann.color.withOpacity(0.85), letterSpacing: 0.8),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    labelPainter.paint(canvas, Offset(originX + 8, originY + 5));
+
+    final valPainter = TextPainter(
+      text: TextSpan(
+        text: ann.text ?? 'JOB-2026-001',
+        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900, fontFamily: 'JetBrainsMono', color: ann.color, letterSpacing: 1.0),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    valPainter.paint(canvas, Offset(originX + 8, originY + 17));
 
     if (isSelected) {
       _drawBoundingHalo(canvas, boxRect, ann.color);
@@ -428,7 +670,12 @@ class DrawingCanvasPainter extends CustomPainter {
   void _paintText(Canvas canvas, Size size, AnnotationItem ann, {required bool isSelected}) {
     if (ann.points.isEmpty || ann.text == null || ann.text!.isEmpty) return;
 
-    final textStyle = AppTypography.engineeringTextStyle(
+    final fontId = ann.metadata?['fontFamily'] as String?;
+    final font = EngineeringFont.fromId(fontId);
+    final alignment = (ann.metadata?['alignment'] as String?) ?? 'left';
+
+    final textStyle = AppTypography.getTextStyle(
+      font: font,
       fontSize: ann.fontSize,
       fontWeight: FontWeight.bold,
       color: ann.color,
@@ -437,31 +684,30 @@ class DrawingCanvasPainter extends CustomPainter {
     final textPainter = TextPainter(
       text: TextSpan(text: ann.text, style: textStyle),
       textDirection: TextDirection.ltr,
+      textAlign: alignment == 'center'
+          ? TextAlign.center
+          : (alignment == 'right' ? TextAlign.right : TextAlign.left),
     )..layout(maxWidth: size.width * 0.8);
 
-    final originX = ann.points.first.x * size.width;
+    double originX = ann.points.first.x * size.width;
     final originY = ann.points.first.y * size.height;
-    const paddingH = 6.0;
-    const paddingV = 3.0;
+
+    // Proper baseline & horizontal alignment
+    if (alignment == 'center') {
+      originX -= (textPainter.width / 2);
+    } else if (alignment == 'right') {
+      originX -= textPainter.width;
+    }
 
     final boxRect = Rect.fromLTWH(
       originX,
       originY,
-      textPainter.width + (paddingH * 2),
-      textPainter.height + (paddingV * 2),
+      textPainter.width,
+      textPainter.height,
     );
 
-    final bgPaint = Paint()..color = Colors.white;
-    final rrect = RRect.fromRectAndRadius(boxRect, const Radius.circular(4));
-    canvas.drawRRect(rrect, bgPaint);
-
-    final borderPaint = Paint()
-      ..color = ann.color
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-    canvas.drawRRect(rrect, borderPaint);
-
-    textPainter.paint(canvas, Offset(originX + paddingH, originY + paddingV));
+    // Transparent blueprint text - rendered aligned in the chosen downloaded font
+    textPainter.paint(canvas, Offset(originX, originY));
 
     if (ann.attachedTag != null) {
       final tagPainter = TextPainter(
@@ -471,7 +717,6 @@ class DrawingCanvasPainter extends CustomPainter {
             fontSize: 8.5,
             fontWeight: FontWeight.bold,
             color: Color(0xFF00695C),
-            backgroundColor: Color(0xFFE0F2F1),
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -480,7 +725,18 @@ class DrawingCanvasPainter extends CustomPainter {
     }
 
     if (isSelected) {
-      _drawBoundingHalo(canvas, boxRect, ann.color);
+      _drawBoundingHalo(canvas, boxRect.inflate(4.0), ann.color);
+
+      // Drafting alignment guide baseline
+      final guidePaint = Paint()
+        ..color = ann.color.withOpacity(0.45)
+        ..strokeWidth = 1.0
+        ..style = PaintingStyle.stroke;
+      canvas.drawLine(
+        Offset(originX - 12, originY + textPainter.height + 1),
+        Offset(originX + textPainter.width + 12, originY + textPainter.height + 1),
+        guidePaint,
+      );
     }
   }
 
@@ -489,7 +745,10 @@ class DrawingCanvasPainter extends CustomPainter {
     final targetPt = ann.points[0].toOffset(size);
     final boxOrigin = ann.points[1].toOffset(size);
 
-    final textStyle = AppTypography.engineeringTextStyle(
+    final fontId = ann.metadata?['fontFamily'] as String?;
+    final font = EngineeringFont.fromId(fontId);
+    final textStyle = AppTypography.getTextStyle(
+      font: font,
       fontSize: ann.fontSize,
       fontWeight: FontWeight.bold,
       color: ann.color,

@@ -99,8 +99,22 @@ class StrokeBeautifier {
       final circleResult = _tryClassifyCircle(smoothed, rawPoints);
       if (circleResult != null) return circleResult;
 
-      // Any other closed loop -> Revision cloud
-      return _fitCloud(smoothed, rawPoints, snapConfig);
+      // Any other closed loop -> Only convert to Revision Cloud if it's large enough to be an engineering markup!
+      // Small closed loops (perimeter < 0.18 or diagonal < 0.08) are handwritten characters / letters like '6', '8', 'O', 'g', etc.
+      double totalPerimeter = 0.0;
+      for (int i = 0; i < smoothed.length - 1; i++) {
+        totalPerimeter += _dist(smoothed[i], smoothed[i + 1]);
+      }
+      if (totalPerimeter >= 0.18) {
+        return _fitCloud(smoothed, rawPoints, snapConfig);
+      }
+
+      // Small loops remain as natural smoothed freehand strokes (preserves handwriting characters like '6' in 'SL6')
+      return BeautifiedResult(
+        type: AnnotationType.stroke,
+        points: smoothed,
+        didSnap: false,
+      );
     }
 
     // Otherwise: keep smoothed freehand stroke
@@ -190,7 +204,8 @@ class StrokeBeautifier {
     final end = smoothed.last;
     final chordLen = _dist(start, end);
 
-    if (chordLen < 0.015) return null;
+    // Require distinct stroke length so short handwriting letters/accents are preserved
+    if (chordLen < 0.030) return null;
 
     double maxDeviation = 0.0;
     for (int i = 1; i < smoothed.length - 1; i++) {

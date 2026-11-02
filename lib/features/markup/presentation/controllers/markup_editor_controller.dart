@@ -74,6 +74,16 @@ class MarkupEditorState {
   final bool isAdmin;
   final bool isApproved;
 
+  // Job Number configuration (standard prefix + dynamic 3-digit suffix)
+  final String jobPrefix;
+  final String jobSuffix;
+
+  // Font & Typography configuration (downloaded handwriting & CAD fonts)
+  final String activeFontFamily;
+  final String activeTextAlignment;
+
+  String get fullJobNumber => '$jobPrefix$jobSuffix';
+
   const MarkupEditorState({
     this.currentPage = 1,
     this.annotations = const [],
@@ -116,6 +126,10 @@ class MarkupEditorState {
     this.visibleAuthorFilters = const {},
     this.isAdmin = false,
     this.isApproved = false,
+    this.jobPrefix = 'JOB-2026-',
+    this.jobSuffix = '001',
+    this.activeFontFamily = 'architectural',
+    this.activeTextAlignment = 'left',
   });
 
   bool get isReadOnly => isApproved && !isAdmin;
@@ -198,6 +212,10 @@ class MarkupEditorState {
     Set<String>? visibleAuthorFilters,
     bool? isAdmin,
     bool? isApproved,
+    String? jobPrefix,
+    String? jobSuffix,
+    String? activeFontFamily,
+    String? activeTextAlignment,
   }) {
     return MarkupEditorState(
       currentPage: currentPage ?? this.currentPage,
@@ -233,6 +251,10 @@ class MarkupEditorState {
       visibleAuthorFilters: visibleAuthorFilters ?? this.visibleAuthorFilters,
       isAdmin: isAdmin ?? this.isAdmin,
       isApproved: isApproved ?? this.isApproved,
+      jobPrefix: jobPrefix ?? this.jobPrefix,
+      jobSuffix: jobSuffix ?? this.jobSuffix,
+      activeFontFamily: activeFontFamily ?? this.activeFontFamily,
+      activeTextAlignment: activeTextAlignment ?? this.activeTextAlignment,
     );
   }
 }
@@ -560,6 +582,7 @@ class MarkupEditorController extends StateNotifier<MarkupEditorState> {
     required Color color,
     required double x,
     required double y,
+    String? sealCode,
     String? userName,
   }) {
     if (state.isWipeLocked || state.isReadOnly) return;
@@ -574,13 +597,14 @@ class MarkupEditorController extends StateNotifier<MarkupEditorState> {
       color: color,
       strokeWidth: 2.0,
       points: [Point2D(x, y)],
-      text: stampTitle,
+      text: sealCode == 'jobNumber' ? state.fullJobNumber : stampTitle,
       changeType: 'stamp',
       author: authorName,
       metadata: {
         'date': nowStr,
         'user': authorName,
-        'isLocked': true,
+        'sealType': sealCode,
+        'isLocked': false, // Can be dragged and positioned
       },
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
@@ -592,6 +616,128 @@ class MarkupEditorController extends StateNotifier<MarkupEditorState> {
       selectedAnnotationId: newAnnotation.id,
     );
     HapticFeedback.heavyImpact();
+  }
+
+  /// Places all 3 standard seals and the signature in predefined engineering title block slots
+  void applyStandardTitleBlockSealSet() {
+    if (state.isWipeLocked || state.isReadOnly) return;
+    _pushUndoSnapshot();
+
+    final authorName = state.currentUser;
+    final nowStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+    final ts = DateTime.now().microsecondsSinceEpoch;
+
+    // Standard A3 Title Block coordinates:
+    // Seals 1, 2, 3 aligned in standard approval row
+    // Official Signature and Job Number badge positioned right underneath
+    final standardSet = <AnnotationItem>[
+      // Seal 1: QA/QC Approved
+      AnnotationItem(
+        id: 'seal-qa-$ts',
+        type: AnnotationType.stamp,
+        layer: MarkupLayer.inspection,
+        color: const Color(0xFF1B5E20),
+        strokeWidth: 2.0,
+        points: const [Point2D(0.68, 0.79)],
+        text: 'QA / QC APPROVED (Seal 1)',
+        changeType: 'stamp',
+        author: authorName,
+        metadata: {'date': nowStr, 'user': authorName, 'sealType': 'qaQcSeal', 'isLocked': false},
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+      // Seal 2: Safety & Structural Integrity
+      AnnotationItem(
+        id: 'seal-safety-$ts',
+        type: AnnotationType.stamp,
+        layer: MarkupLayer.inspection,
+        color: const Color(0xFF0D47A1),
+        strokeWidth: 2.0,
+        points: const [Point2D(0.79, 0.79)],
+        text: 'SAFETY & STRUCTURAL (Seal 2)',
+        changeType: 'stamp',
+        author: authorName,
+        metadata: {'date': nowStr, 'user': authorName, 'sealType': 'safetySeal', 'isLocked': false},
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+      // Seal 3: Licensed PE Seal
+      AnnotationItem(
+        id: 'seal-pe-$ts',
+        type: AnnotationType.stamp,
+        layer: MarkupLayer.inspection,
+        color: const Color(0xFFB71C1C),
+        strokeWidth: 2.0,
+        points: const [Point2D(0.89, 0.79)],
+        text: 'LICENSED PE SEAL (Seal 3)',
+        changeType: 'stamp',
+        author: authorName,
+        metadata: {'date': nowStr, 'user': authorName, 'sealType': 'peSeal', 'isLocked': false},
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+      // Reusable Signature
+      AnnotationItem(
+        id: 'seal-sig-$ts',
+        type: AnnotationType.stamp,
+        layer: MarkupLayer.inspection,
+        color: const Color(0xFF1A237E),
+        strokeWidth: 2.0,
+        points: const [Point2D(0.71, 0.90)],
+        text: 'OFFICIAL SIGNATURE',
+        changeType: 'stamp',
+        author: authorName,
+        metadata: {'date': nowStr, 'user': authorName, 'sealType': 'signature', 'isLocked': false},
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+      // Job Number Badge
+      AnnotationItem(
+        id: 'seal-job-$ts',
+        type: AnnotationType.stamp,
+        layer: MarkupLayer.inspection,
+        color: const Color(0xFF37474F),
+        strokeWidth: 2.0,
+        points: const [Point2D(0.86, 0.90)],
+        text: state.fullJobNumber,
+        changeType: 'stamp',
+        author: authorName,
+        metadata: {'date': nowStr, 'user': authorName, 'sealType': 'jobNumber', 'isLocked': false},
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+    ];
+
+    final updated = List<AnnotationItem>.from(state.annotations)..addAll(standardSet);
+    state = state.copyWith(annotations: updated);
+    HapticFeedback.heavyImpact();
+  }
+
+  /// Updates dynamic 3-digit suffix of the job number and synchronizes drawing badges
+  void setJobSuffix(String suffix) {
+    final clean = suffix.trim();
+    final updatedJobNumber = '${state.jobPrefix}$clean';
+
+    final updatedAnnotations = state.annotations.map((a) {
+      if (a.type == AnnotationType.stamp && a.metadata?['sealType'] == 'jobNumber') {
+        return a.copyWith(text: updatedJobNumber, updatedAt: DateTime.now());
+      }
+      return a;
+    }).toList();
+
+    state = state.copyWith(
+      jobSuffix: clean,
+      annotations: updatedAnnotations,
+    );
+  }
+
+  /// Toggles Palm Rejection / Stylus-Only mode
+  void toggleStylusOnly() {
+    state = state.copyWith(allowFingerDrawing: !state.allowFingerDrawing);
+  }
+
+  void setAllowFingerDrawing(bool allow) {
+    state = state.copyWith(allowFingerDrawing: allow);
   }
 
   // --- Tool & Property Selection ---
@@ -828,9 +974,15 @@ class MarkupEditorController extends StateNotifier<MarkupEditorState> {
     required double y,
     String size = 'M',
     Color? color,
+    String? fontFamily,
+    String? alignment,
   }) {
     if (state.isWipeLocked || state.isReadOnly) return;
     _pushUndoSnapshot();
+
+    final chosenFont = fontFamily ?? state.activeFontFamily;
+    final chosenAlignment = alignment ?? state.activeTextAlignment;
+
     final newAnnotation = AnnotationItem(
       id: 'lbl-${DateTime.now().microsecondsSinceEpoch}',
       type: AnnotationType.text,
@@ -841,6 +993,10 @@ class MarkupEditorController extends StateNotifier<MarkupEditorState> {
       text: text,
       author: state.currentUser,
       size: size,
+      metadata: {
+        'fontFamily': chosenFont,
+        'alignment': chosenAlignment,
+      },
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -852,18 +1008,141 @@ class MarkupEditorController extends StateNotifier<MarkupEditorState> {
     );
   }
 
+  /// Sets the active downloaded font for handwriting & text annotations
+  void setActiveFont(String fontId) {
+    state = state.copyWith(activeFontFamily: fontId);
+
+    // If an annotation is currently selected, update its font dynamically
+    if (state.selectedAnnotationId != null) {
+      final index = state.annotations.indexWhere((a) => a.id == state.selectedAnnotationId);
+      if (index != -1 && (state.annotations[index].type == AnnotationType.text || state.annotations[index].type == AnnotationType.callout)) {
+        final item = state.annotations[index];
+        final updatedMeta = Map<String, dynamic>.from(item.metadata ?? {});
+        updatedMeta['fontFamily'] = fontId;
+        final updatedList = List<AnnotationItem>.from(state.annotations);
+        updatedList[index] = item.copyWith(metadata: updatedMeta, updatedAt: DateTime.now());
+        state = state.copyWith(annotations: updatedList);
+      }
+    }
+  }
+
+  /// Sets active text alignment ('left', 'center', 'right')
+  void setTextAlignment(String alignment) {
+    state = state.copyWith(activeTextAlignment: alignment);
+
+    // If a text annotation is currently selected, update its alignment dynamically
+    if (state.selectedAnnotationId != null) {
+      final index = state.annotations.indexWhere((a) => a.id == state.selectedAnnotationId);
+      if (index != -1 && state.annotations[index].type == AnnotationType.text) {
+        final item = state.annotations[index];
+        final updatedMeta = Map<String, dynamic>.from(item.metadata ?? {});
+        updatedMeta['alignment'] = alignment;
+        final updatedList = List<AnnotationItem>.from(state.annotations);
+        updatedList[index] = item.copyWith(metadata: updatedMeta, updatedAt: DateTime.now());
+        state = state.copyWith(annotations: updatedList);
+      }
+    }
+  }
+
+  /// Updates an existing label's text, size, color, font, or alignment
+  void updateLabel({
+    required String annotationId,
+    required String text,
+    String? size,
+    Color? color,
+    String? fontFamily,
+    String? alignment,
+  }) {
+    if (state.isWipeLocked || state.isReadOnly) return;
+    final index = state.annotations.indexWhere((a) => a.id == annotationId);
+    if (index == -1) return;
+
+    _pushUndoSnapshot();
+    final item = state.annotations[index];
+    final updatedMeta = Map<String, dynamic>.from(item.metadata ?? {});
+    if (fontFamily != null) updatedMeta['fontFamily'] = fontFamily;
+    if (alignment != null) updatedMeta['alignment'] = alignment;
+
+    final updated = List<AnnotationItem>.from(state.annotations);
+    updated[index] = item.copyWith(
+      text: text,
+      size: size ?? item.size,
+      color: color ?? item.color,
+      metadata: updatedMeta,
+      updatedAt: DateTime.now(),
+    );
+
+    state = state.copyWith(
+      annotations: updated,
+      hasUnsavedChanges: true,
+      canUndo: true,
+    );
+  }
+
+  /// Converts a handwritten pen stroke into aligned text in the downloaded font
+  void convertAnnotationToText({
+    required String annotationId,
+    required String text,
+    String? fontFamily,
+    String? alignment,
+    String size = 'M',
+    Color? color,
+  }) {
+    if (state.isWipeLocked || state.isReadOnly) return;
+    final index = state.annotations.indexWhere((a) => a.id == annotationId);
+    if (index == -1) return;
+
+    _pushUndoSnapshot();
+
+    final original = state.annotations[index];
+    final origin = original.points.isNotEmpty ? original.points.first : const Point2D(0.5, 0.5);
+    final chosenFont = fontFamily ?? state.activeFontFamily;
+    final chosenAlignment = alignment ?? state.activeTextAlignment;
+
+    final newTextAnnotation = AnnotationItem(
+      id: 'lbl-${DateTime.now().microsecondsSinceEpoch}',
+      type: AnnotationType.text,
+      layer: original.layer,
+      color: color ?? original.color,
+      strokeWidth: 1.5,
+      points: [origin],
+      text: text,
+      author: state.currentUser,
+      size: size,
+      metadata: {
+        'fontFamily': chosenFont,
+        'alignment': chosenAlignment,
+      },
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    final updated = List<AnnotationItem>.from(state.annotations);
+    updated[index] = newTextAnnotation;
+    state = state.copyWith(
+      annotations: updated,
+      selectedAnnotationId: newTextAnnotation.id,
+      hasUnsavedChanges: true,
+      canUndo: true,
+    );
+  }
+
   void moveAnnotation(String id, Point2D newPos) {
     if (state.isWipeLocked || state.isReadOnly) return;
     final index = state.annotations.indexWhere((a) => a.id == id);
     if (index == -1) return;
 
     final item = state.annotations[index];
-    if (item.type == AnnotationType.stamp || item.metadata?['isLocked'] == true) return;
+    if (item.metadata?['isLocked'] == true) return;
     if (!state.isAdmin && item.author != null && item.author != state.currentUser) return;
 
     final updated = List<AnnotationItem>.from(state.annotations);
 
-    if (item.type == AnnotationType.text || item.type == AnnotationType.noteBox || item.type == AnnotationType.photoPin || item.points.length == 1) {
+    if (item.type == AnnotationType.text ||
+        item.type == AnnotationType.noteBox ||
+        item.type == AnnotationType.stamp ||
+        item.type == AnnotationType.photoPin ||
+        item.points.length == 1) {
       updated[index] = item.copyWith(points: [newPos], updatedAt: DateTime.now());
     } else if (item.points.isNotEmpty) {
       final origin = item.points.first;

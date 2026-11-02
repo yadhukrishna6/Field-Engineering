@@ -7,11 +7,16 @@ import 'api_endpoints.dart';
 class ApiClient {
   final String baseUrl;
 
-  ApiClient({this.baseUrl = ApiEndpoints.baseUrl});
+  ApiClient({String? baseUrl}) : baseUrl = baseUrl ?? ApiEndpoints.baseUrl;
+
+  static const Map<String, String> _headers = {
+    'Bypass-Tunnel-Reminder': 'true',
+    'Accept': 'application/json',
+  };
 
   Future<bool> checkHealth() async {
     try {
-      final res = await http.get(Uri.parse('$baseUrl/projects')).timeout(const Duration(seconds: 3));
+      final res = await http.get(Uri.parse('$baseUrl/projects'), headers: _headers).timeout(const Duration(seconds: 3));
       return res.statusCode == 200;
     } catch (_) {
       return false;
@@ -26,6 +31,7 @@ class ApiClient {
     try {
       final uri = Uri.parse(ApiEndpoints.drawings);
       final request = http.MultipartRequest('POST', uri);
+      request.headers.addAll(_headers);
       request.fields['name'] = fileName;
 
       if (fileBytes != null && fileBytes.isNotEmpty) {
@@ -68,7 +74,7 @@ class ApiClient {
 
   Future<List<Map<String, dynamic>>> getDrawings() async {
     try {
-      final res = await http.get(Uri.parse(ApiEndpoints.drawings)).timeout(const Duration(seconds: 4));
+      final res = await http.get(Uri.parse(ApiEndpoints.drawings), headers: _headers).timeout(const Duration(seconds: 4));
       if (res.statusCode == 200) {
         final List list = jsonDecode(res.body) as List;
         return list.map((e) => e as Map<String, dynamic>).toList();
@@ -81,7 +87,7 @@ class ApiClient {
 
   Future<bool> deleteDrawing(String id) async {
     try {
-      final res = await http.delete(Uri.parse(ApiEndpoints.drawingById(id))).timeout(const Duration(seconds: 4));
+      final res = await http.delete(Uri.parse(ApiEndpoints.drawingById(id)), headers: _headers).timeout(const Duration(seconds: 4));
       return res.statusCode == 200 || res.statusCode == 204;
     } catch (e) {
       debugPrint('[ApiClient] deleteDrawing error: $e');
@@ -93,5 +99,3 @@ class ApiClient {
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient();
 });
-
-

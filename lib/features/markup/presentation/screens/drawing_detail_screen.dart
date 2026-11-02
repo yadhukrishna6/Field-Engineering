@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/api/api_endpoints.dart';
 import '../../domain/models/drawing_file.dart';
 import '../../domain/models/page_markup.dart';
 import '../../domain/utils/markup_pdf_exporter.dart';
@@ -317,9 +318,7 @@ class _DrawingDetailScreenState extends ConsumerState<DrawingDetailScreen> {
             return await File(path).readAsBytes();
           } else if (drawing.fileUrl != null && drawing.fileUrl!.isNotEmpty) {
             try {
-              final url = drawing.fileUrl!.startsWith('http')
-                  ? drawing.fileUrl!
-                  : 'http://localhost:8081${drawing.fileUrl}';
+              final url = ApiEndpoints.resolveUrl(drawing.fileUrl!);
               final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
               if (res.statusCode == 200) return res.bodyBytes;
             } catch (_) {}
@@ -344,9 +343,7 @@ class _DrawingDetailScreenState extends ConsumerState<DrawingDetailScreen> {
       if (!kIsWeb && path.isNotEmpty && File(path).existsSync()) {
         return Image.file(File(path), fit: BoxFit.contain);
       } else if (drawing.fileUrl != null && drawing.fileUrl!.isNotEmpty) {
-        final url = drawing.fileUrl!.startsWith('http')
-            ? drawing.fileUrl!
-            : 'http://localhost:8081${drawing.fileUrl}';
+        final url = ApiEndpoints.resolveUrl(drawing.fileUrl!);
         return Image.network(
           url,
           fit: BoxFit.contain,

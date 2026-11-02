@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/glove_mode_controller.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../controllers/markup_editor_controller.dart';
+import 'font_selector_sheet.dart';
 import 'quick_notes_sheet.dart';
 import 'stamps_sheet.dart';
 
@@ -11,12 +13,14 @@ class MarkupBottomToolbar extends ConsumerWidget {
   final MarkupEditorState state;
   final MarkupEditorController controller;
   final VoidCallback onResetZoom;
+  final VoidCallback? onEditJobNumber;
 
   const MarkupBottomToolbar({
     super.key,
     required this.state,
     required this.controller,
     required this.onResetZoom,
+    this.onEditJobNumber,
   });
 
   String _getColorMeaningTooltip(Color color) {
@@ -156,7 +160,12 @@ class MarkupBottomToolbar extends ConsumerWidget {
                   // Stamps Button (Phase B)
                   InkWell(
                     onTap: () async {
-                      final stamp = await StampsSheet.show(context, isOutdoor: isOutdoor, isDark: isDark);
+                      final stamp = await StampsSheet.show(
+                        context,
+                        isOutdoor: isOutdoor,
+                        isDark: isDark,
+                        onApplyStandardSet: () => controller.applyStandardTitleBlockSealSet(),
+                      );
                       if (stamp != null) {
                         controller.setStampType(stamp, isOutdoor);
                       }
@@ -186,6 +195,54 @@ class MarkupBottomToolbar extends ConsumerWidget {
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+
+                  // Downloaded Engineering Font & Alignment Selector Chip
+                  Tooltip(
+                    message: 'Active Lettering Font: ${EngineeringFont.fromId(state.activeFontFamily).displayName} (Tap to change font or alignment)',
+                    child: InkWell(
+                      onTap: () {
+                        FontSelectorSheet.show(
+                          context,
+                          activeFontId: state.activeFontFamily,
+                          activeAlignment: state.activeTextAlignment,
+                          isDark: isDark,
+                          isOutdoor: isOutdoor,
+                          onSelectFont: (fontId) => controller.setActiveFont(fontId),
+                          onSelectAlignment: (alignment) => controller.setTextAlignment(alignment),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        constraints: BoxConstraints(minHeight: minTouchTarget, minWidth: minTouchTarget),
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: outlineColor,
+                            width: isOutdoor ? 1.5 : 1.0,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.font_download_rounded, size: iconSize - 4, color: primaryColor),
+                            const SizedBox(width: 4),
+                            Text(
+                              EngineeringFont.fromId(state.activeFontFamily).displayName,
+                              style: TextStyle(
+                                fontSize: isOutdoor ? 12 : 11,
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(Icons.arrow_drop_down_rounded, size: 16, color: textColor.withOpacity(0.7)),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -234,10 +291,91 @@ class MarkupBottomToolbar extends ConsumerWidget {
 
               const SizedBox(width: 12),
 
-              // Right: Glove Mode Toggle, Wipe Lock Toggle, Zoom & Undo/Redo
+              // Right: Job Number, Stylus Only (Palm Rejection), Glove Mode, Wipe Lock, Undo/Redo, Zoom
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Job Number Badge (Tap to edit dynamic last 3 digits)
+                  if (onEditJobNumber != null) ...[
+                    Tooltip(
+                      message: 'Job Number: ${state.fullJobNumber} (Tap to change last 3 digits)',
+                      child: InkWell(
+                        onTap: onEditJobNumber,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          constraints: BoxConstraints(minHeight: minTouchTarget * 0.7),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: primaryColor.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: primaryColor.withOpacity(0.4), width: 1.0),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.tag_rounded, size: iconSize - 6, color: primaryColor),
+                              const SizedBox(width: 3),
+                              Text(
+                                state.fullJobNumber,
+                                style: TextStyle(
+                                  fontSize: isOutdoor ? 11 : 10,
+                                  fontWeight: FontWeight.w900,
+                                  fontFamily: 'JetBrainsMono',
+                                  color: primaryColor,
+                                ),
+                              ),
+                              const SizedBox(width: 3),
+                              Icon(Icons.edit_rounded, size: iconSize - 8, color: primaryColor.withOpacity(0.8)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+
+                  // Palm Rejection / Stylus-Only Mode Toggle
+                  Tooltip(
+                    message: !state.allowFingerDrawing
+                        ? 'Palm Rejection Active (Stylus Only draws, touch pans & zooms)'
+                        : 'Touch Drawing Active (Tap to enable Stylus-Only / Palm Rejection)',
+                    child: InkWell(
+                      onTap: () => controller.toggleStylusOnly(),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        constraints: BoxConstraints(minHeight: minTouchTarget, minWidth: minTouchTarget),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: !state.allowFingerDrawing ? primaryColor.withOpacity(0.22) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: !state.allowFingerDrawing ? primaryColor : outlineColor,
+                            width: isOutdoor ? 1.5 : 1.0,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              !state.allowFingerDrawing ? Icons.draw_rounded : Icons.touch_app_rounded,
+                              size: iconSize - 4,
+                              color: !state.allowFingerDrawing ? primaryColor : textColor,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              !state.allowFingerDrawing ? 'Stylus Only' : 'Touch Ink',
+                              style: TextStyle(
+                                fontSize: isOutdoor ? 11 : 10,
+                                fontWeight: FontWeight.bold,
+                                color: !state.allowFingerDrawing ? primaryColor : textColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+
                   // Glove Mode Toggle
                   Tooltip(
                     message: isGlove ? 'Glove Mode Active (>= 56dp touch targets)' : 'Enable Glove Mode',
