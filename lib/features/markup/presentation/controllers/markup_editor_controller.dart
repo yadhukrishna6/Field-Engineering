@@ -584,6 +584,7 @@ class MarkupEditorController extends StateNotifier<MarkupEditorState> {
     required double y,
     String? sealCode,
     String? userName,
+    bool isLocked = true,
   }) {
     if (state.isWipeLocked || state.isReadOnly) return;
     _pushUndoSnapshot();
@@ -604,7 +605,7 @@ class MarkupEditorController extends StateNotifier<MarkupEditorState> {
         'date': nowStr,
         'user': authorName,
         'sealType': sealCode,
-        'isLocked': false, // Can be dragged and positioned
+        'isLocked': isLocked,
       },
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
@@ -843,6 +844,13 @@ class MarkupEditorController extends StateNotifier<MarkupEditorState> {
         toleranceDegrees: state.snapConfig.angleToleranceDegrees,
       );
       state = state.copyWith(snapGuideLine: [start, snapped]);
+    }
+  }
+
+  void cancelStroke() {
+    _holdToBeautifyTimer?.cancel();
+    if (state.activeStrokePoints.isNotEmpty) {
+      state = state.copyWith(activeStrokePoints: const [], clearSnapGuide: true);
     }
   }
 

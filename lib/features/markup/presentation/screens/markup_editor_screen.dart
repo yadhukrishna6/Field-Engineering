@@ -56,6 +56,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
 
   Point2D? _pointerDownPoint;
   bool _isDraggingAnnotation = false;
+  int _activePointers = 0;
 
   @override
   void initState() {
@@ -692,7 +693,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                         ),
 
                       // Wipe Lock Protection Overlay (Phase A)
-                      if (state.isWipeLocked)
+                      if (state.isWipeLocked && !state.autoLockedDueToPalm)
                         Positioned.fill(
                           child: WipeLockOverlay(
                             isAutoLocked: state.autoLockedDueToPalm,
@@ -981,7 +982,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
         minScale: 0.5,
         maxScale: 8.0,
         boundaryMargin: const EdgeInsets.all(200),
-        panEnabled: !isLocked && !state.allowFingerDrawing,
+        panEnabled: false, // 1-finger is dedicated to drawing; 2-finger pinch/drag smoothly zooms and pans
         scaleEnabled: !isLocked,
         child: Center(
           child: AspectRatio(
@@ -989,11 +990,10 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
             child: Listener(
               onPointerDown: (event) {
                 if (isLocked) return;
-
-                // Palm / cloth contact auto-lock detection (Phase A)
-                if (event.kind == PointerDeviceKind.touch &&
-                    (event.radiusMajor > 25.0 || event.radiusMinor > 25.0 || event.size > 0.25)) {
-                  controller.triggerPalmClothAutoLock();
+                _activePointers++;
+                if (_activePointers > 1) {
+                  // Multi-touch: user is pinching/zooming with 2 fingers, cancel active stroke
+                  controller.cancelStroke();
                   return;
                 }
 
@@ -1165,6 +1165,7 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
               },
               onPointerMove: (event) {
                 if (isLocked || state.isReadOnly) return;
+                if (_activePointers > 1) return; // Ignore stroke updates while multi-touch zooming
                 final isStylusOrPointer = event.kind == PointerDeviceKind.stylus ||
                     event.kind == PointerDeviceKind.mouse ||
                     event.kind == PointerDeviceKind.trackpad;
@@ -1187,6 +1188,8 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                 }
               },
               onPointerUp: (event) {
+                if (_activePointers > 0) _activePointers--;
+                if (_activePointers > 0) return;
                 if (isLocked || state.isReadOnly) return;
                 final p = _screenToPage(event.position);
 
@@ -1225,6 +1228,12 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
                   controller.finishStroke();
                 }
                 _pointerDownPoint = null;
+              },
+              onPointerCancel: (event) {
+                if (_activePointers > 0) _activePointers--;
+                if (_activePointers == 0) {
+                  controller.cancelStroke();
+                }
               },
               child: Container(
                 key: _canvasKey,
