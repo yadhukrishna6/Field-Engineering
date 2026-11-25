@@ -347,27 +347,23 @@ class _DrawingDetailScreenState extends ConsumerState<DrawingDetailScreen> {
         return Image.network(
           url,
           fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.architecture_rounded, size: 48, color: AppColors.lightPrimary),
-                const SizedBox(height: 8),
-                Text(drawing.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
-              ],
-            ),
+          headers: const {
+            'Bypass-Tunnel-Reminder': 'true',
+            'Accept': 'image/*, application/octet-stream',
+          },
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+          },
+          errorBuilder: (_, __, ___) => Image.asset(
+            'assets/sample_drawings/isometric_blueprint.jpg',
+            fit: BoxFit.contain,
           ),
         );
       } else {
-        return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.architecture_rounded, size: 48, color: AppColors.lightPrimary),
-              const SizedBox(height: 8),
-              Text(drawing.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
-            ],
-          ),
+        return Image.asset(
+          'assets/sample_drawings/isometric_blueprint.jpg',
+          fit: BoxFit.contain,
         );
       }
     }

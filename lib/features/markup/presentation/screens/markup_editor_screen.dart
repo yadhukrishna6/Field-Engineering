@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'package:printing/printing.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/api/api_endpoints.dart';
 import '../../../../core/theme/glove_mode_controller.dart';
@@ -1488,22 +1490,91 @@ class _MarkupEditorScreenState extends ConsumerState<MarkupEditorScreen> {
   }
 
   Widget _buildBaseLayer(DrawingFile drawing) {
+    return IgnorePointer(
+      child: _buildBaseLayerContent(drawing),
+    );
+  }
+
+  Widget _buildBaseLayerContent(DrawingFile drawing) {
     final path = drawing.localPath;
-    if (!kIsWeb && path.isNotEmpty && File(path).existsSync()) {
-      return Image.file(
-        File(path),
-        fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => _buildBlueprintPlaceholder(),
+    final fileExists = !kIsWeb && path.isNotEmpty && File(path).existsSync();
+
+    if (drawing.isPdf) {
+      return PdfPreview(
+        build: (format) async {
+          if (!kIsWeb && fileExists) {
+            try {
+              return await File(path).readAsBytes();
+            } catch (_) {}
+          }
+          if (drawing.fileUrl != null && drawing.fileUrl!.isNotEmpty) {
+            try {
+              final url = ApiEndpoints.resolveUrl(drawing.fileUrl!);
+              final res = await http.get(
+                Uri.parse(url),
+                headers: {
+                  'Bypass-Tunnel-Reminder': 'true',
+                  'Accept': 'application/pdf, application/octet-stream',
+                },
+              ).timeout(const Duration(seconds: 15));
+              if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) {
+                return res.bodyBytes;
+              }
+            } catch (_) {}
+          }
+          try {
+            final bd = await rootBundle.load('assets/sample_drawings/pid_drawing_sample.pdf');
+            return bd.buffer.asUint8List();
+          } catch (_) {
+            return Uint8List(0);
+          }
+        },
+        useActions: false,
+        canChangeOrientation: false,
+        canChangePageFormat: false,
+        canDebug: false,
+        dynamicLayout: false,
+        maxPageWidth: 1200,
+        loadingWidget: const Center(
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        pdfFileName: '${drawing.name}.pdf',
       );
-    } else if (drawing.fileUrl != null && drawing.fileUrl!.isNotEmpty && !drawing.isPdf) {
-      final url = ApiEndpoints.resolveUrl(drawing.fileUrl!);
-      return Image.network(
-        url,
-        fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => _buildBlueprintPlaceholder(),
-      );
+    } else {
+      if (!kIsWeb && fileExists) {
+        return Image.file(
+          File(path),
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => _buildFallbackDrawing(drawing),
+        );
+      } else if (drawing.fileUrl != null && drawing.fileUrl!.isNotEmpty) {
+        final url = ApiEndpoints.resolveUrl(drawing.fileUrl!);
+        return Image.network(
+          url,
+          fit: BoxFit.contain,
+          headers: const {
+            'Bypass-Tunnel-Reminder': 'true',
+            'Accept': 'image/*, application/octet-stream',
+          },
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return const Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
+            );
+          },
+          errorBuilder: (_, __, ___) => _buildFallbackDrawing(drawing),
+        );
+      }
+      return _buildFallbackDrawing(drawing);
     }
-    return _buildBlueprintPlaceholder();
+  }
+
+  Widget _buildFallbackDrawing(DrawingFile drawing) {
+    return Image.asset(
+      'assets/sample_drawings/isometric_blueprint.jpg',
+      fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) => _buildBlueprintPlaceholder(),
+    );
   }
 
   Widget _buildBlueprintPlaceholder() {
